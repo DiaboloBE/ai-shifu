@@ -15,16 +15,18 @@ from flaskr.service.study.utils import (
     get_model_setting,
 )
 
-from ...service.lesson.models import AILessonScript
+from ...service.lesson.models import AILessonScript, AILesson
 from ...service.order.models import AICourseLessonAttend
 from ...service.study.const import ROLE_TEACHER
 from ...dao import db
 from .utils import make_script_dto, get_lesson_system
+from flaskr.framework import extensible_generic
 
 
 def generate_fix_output(
     app: Flask,
     user_id: str,
+    lesson: AILesson,
     attend: AICourseLessonAttend,
     script_info: AILessonScript,
     trace: Trace,
@@ -60,6 +62,7 @@ def generate_fix_output(
 def generate_prompt_output(
     app: Flask,
     user_id: str,
+    lesson: AILesson,
     attend: AICourseLessonAttend,
     script_info: AILessonScript,
     trace: Trace,
@@ -79,10 +82,16 @@ def generate_prompt_output(
     model_setting = get_model_setting(app, script_info)
     resp = invoke_llm(
         app,
+        user_id,
         span,
         model=model_setting.model_name,
         stream=True,
         system=system_prompt,
+        generation_name=lesson.lesson_no
+        + "_"
+        + str(script_info.script_index)
+        + "_"
+        + script_info.script_name,
         **model_setting.model_args,
         message=prompt,
     )
@@ -106,9 +115,11 @@ OUTPUT_HANDLERS = {
 }
 
 
+@extensible_generic
 def handle_output(
     app: Flask,
     user_id: str,
+    lesson: AILesson,
     attend: AICourseLessonAttend,
     script_info: AILessonScript,
     input: str,
@@ -133,7 +144,7 @@ def handle_output(
             )
         )
         yield from OUTPUT_HANDLERS[script_info.script_type](
-            app, user_id, attend, script_info, trace, trace_args
+            app, user_id, lesson, attend, script_info, trace, trace_args
         )
         yield make_script_dto("text_end", "", script_info.script_id)
     else:

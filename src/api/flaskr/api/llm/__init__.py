@@ -9,7 +9,7 @@ from langfuse.model import ModelUsage
 from openai.types.chat import ChatCompletionStreamOptionsParam
 from openai.types.shared_params import ResponseFormatJSONObject
 from flask import current_app
-
+from .dify import dify_chat_message
 from flaskr.common.config import get_config
 from flaskr.service.common.models import raise_error_with_args
 
@@ -75,6 +75,23 @@ try:
 except Exception as e:
     current_app.logger.warning(f"get openai models error: {e}")
     OPENAI_MODELS = []
+
+silicon_enabled = False
+SILICON_MODELS = []
+SILICON_PREFIX = "silicon/"
+if get_config("SILICON_API_KEY"):
+    silicon_enabled = True
+    current_app.logger.info("SILICON CONFIGURED")
+    silicon_client = openai.Client(
+        api_key=get_config("SILICON_API_KEY"), base_url="https://api.siliconflow.cn/v1"
+    )
+
+    SILICON_MODELS = [SILICON_PREFIX + i.id for i in silicon_client.models.list().data]
+    current_app.logger.info(f"SILICON_MODELS: {SILICON_MODELS}")
+else:
+    current_app.logger.warning("SILICON_API_KEY not configured")
+    silicon_client = None
+
 ERNIE_MODELS = get_erine_models(Flask(__name__))
 GLM_MODELS = get_zhipu_models(Flask(__name__))
 DEEP_SEEK_MODELS = ["deepseek-chat"]
@@ -117,6 +134,14 @@ QWEN_MODELS = [
 ]
 
 
+DIFY_MODELS = []
+
+if get_config("DIFY_API_KEY") and get_config("DIFY_URL"):
+    DIFY_MODELS = ["dify"]
+else:
+    current_app.logger.warning("DIFY_API_KEY and DIFY_URL not configured")
+
+
 class LLMStreamaUsage:
     def __init__(self, prompt_tokens, completion_tokens, total_tokens):
         self.prompt_tokens = prompt_tokens
@@ -137,11 +162,13 @@ class LLMStreamResponse:
 
 def invoke_llm(
     app: Flask,
+    user_id: str,
     span: StatefulSpanClient,
     model: str,
     message: str,
     system: str = None,
     json: bool = False,
+    generation_name: str = "invoke_llm",
     **kwargs,
 ) -> Generator[LLMStreamResponse, None, None]:
     app.logger.info(
@@ -153,7 +180,9 @@ def invoke_llm(
     if system:
         generation_input.append({"role": "system", "content": system})
     generation_input.append({"role": "user", "content": message})
-    generation = span.generation(model=model, input=generation_input)
+    generation = span.generation(
+        model=model, input=generation_input, name=generation_name
+    )
     response_text = ""
     usage = None
     if (
@@ -161,6 +190,7 @@ def invoke_llm(
         or model.startswith("gpt")
         or model in QWEN_MODELS
         or model in DEEP_SEEK_MODELS
+        or model in SILICON_MODELS
     ):
         if model in OPENAI_MODELS or model.startswith("gpt"):
             client = openai_client
@@ -185,6 +215,15 @@ def invoke_llm(
                     "LLM.SPECIFIED_LLM_NOT_CONFIGURED",
                     model=model,
                     config_var="DEEPSEEK_API_KEY,DEEPSEEK_API_URL",
+                )
+        elif model in SILICON_MODELS:
+            client = silicon_client
+            model = model.replace(SILICON_PREFIX, "")
+            if not client:
+                raise_error_with_args(
+                    "LLM.SPECIFIED_LLM_NOT_CONFIGURED",
+                    model=model,
+                    config_var="SILICON_API_KEY,SILICON_API_URL",
                 )
         messages = []
         if system:
@@ -278,6 +317,19 @@ def invoke_llm(
                 res.choices[0].finish_reason,
                 None,
             )
+    elif model in DIFY_MODELS:
+        response = dify_chat_message(app, message, user_id)
+        for res in response:
+            if res.event == "message":
+                response_text += res.answer
+                yield LLMStreamResponse(
+                    res.task_id,
+                    True if res.event == "message" else False,
+                    False,
+                    res.answer,
+                    None,
+                    None,
+                )
     else:
         raise_error_with_args(
             "LLM.MODEL_NOT_SUPPORTED",
@@ -294,10 +346,12 @@ def invoke_llm(
 
 def chat_llm(
     app: Flask,
+    user_id: str,
     span: StatefulSpanClient,
     model: str,
     messages: list,
     json: bool = False,
+    generation_name: str = "user_follow_ask",
     **kwargs,
 ) -> Generator[LLMStreamResponse, None, None]:
     app.logger.info(f"chat_llm [{model}] {messages} ,json:{json} ,kwargs:{kwargs}")
@@ -305,10 +359,11 @@ def chat_llm(
     model = model.strip()
     generation_input = messages
     generation = span.generation(
-        model=model, input=generation_input, name="user_follow_ask"
+        model=model, input=generation_input, name=generation_name
     )
     response_text = ""
     usage = None
+
     if kwargs.get("temperature", None) is not None:
         kwargs["temperature"] = float(kwargs.get("temperature", 0.8))
     if (
@@ -316,6 +371,7 @@ def chat_llm(
         or model.startswith("gpt")
         or model in QWEN_MODELS
         or model in DEEP_SEEK_MODELS
+        or model in SILICON_MODELS
     ):
         if model in OPENAI_MODELS or model.startswith("gpt"):
             client = openai_client
@@ -340,6 +396,15 @@ def chat_llm(
                     "LLM.SPECIFIED_LLM_NOT_CONFIGURED",
                     model=model,
                     config_var="DEEPSEEK_API_KEY,DEEPSEEK_API_URL",
+                )
+        elif model in SILICON_MODELS:
+            client = silicon_client
+            model = model.replace(SILICON_PREFIX, "")
+            if not client:
+                raise_error_with_args(
+                    "LLM.SPECIFIED_LLM_NOT_CONFIGURED",
+                    model=model,
+                    config_var="SILICON_API_KEY,SILICON_API_URL",
                 )
         response = client.chat.completions.create(
             model=model, messages=messages, **kwargs
@@ -416,7 +481,19 @@ def chat_llm(
                 res.choices[0].finish_reason,
                 None,
             )
-
+    elif model in DIFY_MODELS:
+        response = dify_chat_message(app, messages[-1]["content"], user_id)
+        for res in response:
+            if res.event == "message":
+                response_text += res.answer
+                yield LLMStreamResponse(
+                    res.task_id,
+                    True if res.event == "message" else False,
+                    False,
+                    res.answer,
+                    None,
+                    None,
+                )
     else:
         raise_error_with_args(
             "LLM.MODEL_NOT_SUPPORTED",
@@ -431,4 +508,12 @@ def chat_llm(
 
 
 def get_current_models(app: Flask) -> list[str]:
-    return OPENAI_MODELS + ERNIE_MODELS + GLM_MODELS + QWEN_MODELS + DEEP_SEEK_MODELS
+    return (
+        OPENAI_MODELS
+        + ERNIE_MODELS
+        + GLM_MODELS
+        + QWEN_MODELS
+        + DEEP_SEEK_MODELS
+        + DIFY_MODELS
+        + SILICON_MODELS
+    )

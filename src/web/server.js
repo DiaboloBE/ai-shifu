@@ -15,6 +15,10 @@ app.post('/config/env', (req, res) => {
       'REACT_APP_ALWAYS_SHOW_LESSON_TREE': process.env.REACT_APP_ALWAYS_SHOW_LESSON_TREE || false,
       'REACT_APP_APP_ID': process.env.REACT_APP_APP_ID || '',
       'REACT_APP_ERUDA': process.env.REACT_APP_ERUDA || false,
+      'REACT_APP_LOGO_HORIZONTAL': process.env.REACT_APP_LOGO_HORIZONTAL || '',
+      'REACT_APP_LOGO_VERTICAL': process.env.REACT_APP_LOGO_VERTICAL || '',
+      'REACT_APP_ENABLE_WXCODE': process.env.REACT_APP_ENABLE_WXCODE !== undefined ? process.env.REACT_APP_ENABLE_WXCODE === 'true' : true,
+      'REACT_APP_SITE_URL': process.env.REACT_APP_SITE_URL || '/',
     });
 });
 // // Serve static files from the React app

@@ -2,7 +2,7 @@ import time
 from trace import Trace
 from flask import Flask
 from flaskr.service.common.models import AppException
-from flaskr.service.lesson.models import AILessonScript
+from flaskr.service.lesson.models import AILessonScript, AILesson
 from flaskr.service.order.models import AICourseLessonAttend
 from flaskr.service.study.const import INPUT_TYPE_CHECKCODE, ROLE_TEACHER
 from flaskr.service.study.input_funcs import BreakException
@@ -11,12 +11,15 @@ from flaskr.service.study.utils import generation_attend, make_script_dto
 from flaskr.service.user.common import verify_sms_code_without_phone
 from flaskr.service.study.const import ROLE_STUDENT
 from flaskr.dao import db
+from flaskr.framework.plugin.plugin_manager import extensible_generic
 
 
 @register_input_handler(input_type=INPUT_TYPE_CHECKCODE)
+@extensible_generic
 def handle_input_checkcode(
     app: Flask,
     user_id: str,
+    lesson: AILesson,
     attend: AICourseLessonAttend,
     script_info: AILessonScript,
     input: str,
