@@ -42,7 +42,6 @@ const NewChatPage = (props) => {
   });
   const [initialized, setInitialized] = useState(false);
   const { hasLogin, userInfo, hasCheckLogin } = useUserStore((state) => state);
-  const [language, setLanguage] = useState(userInfo?.language || 'en-US');
   const [userSettingBasicInfo, setUserSettingBasicInfo] = useState(false);
   const [loadedChapterId, setLoadedChapterId] = useState(null);
   const [showUserSettings, setShowUserSettings] = useState(false);
@@ -95,6 +94,13 @@ const NewChatPage = (props) => {
   const { wechatCode } = useSystemStore(
     useShallow((state) => ({ wechatCode: state.wechatCode }))
   );
+
+
+  useEffect(() => {
+    if (tree) {
+      reloadTree();
+    }
+  }, [i18n.language]);
 
   const fetchData = useCallback(async () => {
     if (tree) {
@@ -261,8 +267,16 @@ const NewChatPage = (props) => {
     })();
   }, [hasCheckLogin, initAndCheckLogin]);
 
+
+
   // listen global event
   useEffect(() => {
+    const resetChapterEventHandler = async (e) => {
+      console.log('resetChapterEventHandler', e);
+      setLoadedChapterId(null);
+      await reloadTree();
+      setLoadedChapterId(e.detail.chapter_id);
+    };
     const eventHandler = () => {
       setLoginModalOpen(true);
     };
@@ -285,6 +299,11 @@ const NewChatPage = (props) => {
       payEventHandler
     );
 
+    shifu.events.addEventListener(
+      shifu.EventTypes.RESET_CHAPTER,
+      resetChapterEventHandler
+    );
+
     return () => {
       shifu.events.removeEventListener(
         shifu.EventTypes.OPEN_LOGIN_MODAL,
@@ -294,6 +313,11 @@ const NewChatPage = (props) => {
       shifu.events.removeEventListener(
         shifu.EventTypes.OPEN_PAY_MODAL,
         payEventHandler
+      );
+
+      shifu.events.removeEventListener(
+        shifu.EventTypes.RESET_CHAPTER,
+        resetChapterEventHandler
       );
     };
   });
@@ -318,9 +342,6 @@ const NewChatPage = (props) => {
     }
   }, [chapterId, hasCheckLogin, loadData, loadedChapterId]);
 
-  useEffect(() => {
-    setLanguage(i18n.language);
-  }, [i18n.language]);
 
   return (
     <div className={classNames(styles.newChatPage)}>
