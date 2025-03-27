@@ -1,5 +1,8 @@
 import '@chatui/core/dist/index.css';
 import Chat, { useMessages } from '@chatui/core';
+import { LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled } from '@ant-design/icons';
+
+
 import {
   useEffect,
   forwardRef,
@@ -8,7 +11,7 @@ import {
   useContext,
   useRef,
 } from 'react';
-import { runScript, getLessonStudyRecord } from 'Api/study';
+import { runScript, getLessonStudyRecord, scriptContentOperation } from 'Api/study';
 import { genUuid } from 'Utils/common.js';
 import ChatInteractionArea from './ChatInput/ChatInteractionArea.jsx';
 import { AppContext } from 'Components/AppContext.js';
@@ -56,6 +59,8 @@ const createMessage = ({
   id = 0,
   role,
   content,
+  interaction_type,
+  logid,
   type = CHAT_MESSAGE_TYPE.TEXT,
   teach_avator,
 }) => {
@@ -80,6 +85,9 @@ const createMessage = ({
     id: mid,
     role,
     content,
+    interaction_type,
+    isComplete: false,
+    logid,
     type,
     position,
     user: { avatar },
@@ -92,9 +100,12 @@ const convertMessage = (serverMessage, userInfo, teach_avator) => {
       id: serverMessage.id,
       role: serverMessage.script_role,
       content: fixMarkdown(serverMessage.script_content),
+      interaction_type: serverMessage.interaction_type,
+      logid: serverMessage.logid,
       type: serverMessage.script_type,
       userInfo,
       teach_avator,
+      isComplete: true,
     });
   } else if (serverMessage.script_type === CHAT_MESSAGE_TYPE.LESSON_SEPARATOR) {
     return createMessage({
@@ -102,8 +113,11 @@ const convertMessage = (serverMessage, userInfo, teach_avator) => {
       role: serverMessage.script_role,
       content: { lessonId: serverMessage.lesson_id },
       type: serverMessage.script_type,
+      interaction_type: serverMessage.interaction_type,
+      logid: serverMessage.logid,
       userInfo,
       teach_avator,
+      isComplete: true,
     });
   }
 
@@ -166,7 +180,7 @@ export const ChatComponents = forwardRef(
     {
       className,
       lessonUpdate,
-      onGoChapter = () => {},
+      onGoChapter = () => { },
       chapterId,
       lessonId,
       onPurchased,
@@ -182,8 +196,6 @@ export const ChatComponents = forwardRef(
 
     const [inputDisabled, setInputDisabled] = useState(false);
     const [inputModal, setInputModal] = useState(null);
-    const [_, setLessonEnd] = useState(false);
-    const [_lastSendMsg, setLastSendMsg] = useState(null);
     const [loadedChapterId, setLoadedChapterId] = useState('');
     const [loadedData, setLoadedData] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
@@ -293,7 +305,6 @@ export const ChatComponents = forwardRef(
           status_value: content.status_value,
         });
 
-        console.log('content.status_value', content.status_value);
         if (
           content.status_value === LESSON_STATUS_VALUE.PREPARE_LEARNING &&
           !isEnd
@@ -307,7 +318,6 @@ export const ChatComponents = forwardRef(
         }
 
         if (content.status_value === LESSON_STATUS_VALUE.LEARNING && !isEnd) {
-          console.log('update lesson learning: ', content.lesson_id);
           updateSelectedLesson(content.lesson_id);
         }
       },
@@ -320,18 +330,12 @@ export const ChatComponents = forwardRef(
           ...v,
           askMode: false,
         }));
-        setLastSendMsg({ chatId, lessonId, val, type, scriptId });
         let lastMsg = null;
         let isEnd = false;
         let teach_avator = null;
         let lastLessonId = messageLessonId;
 
         runScript(chatId, lessonId, val, type, scriptId, async (response) => {
-          setLessonEnd((v) => {
-            isEnd = v;
-            return v;
-          });
-
           if (response.type === RESP_EVENT_TYPE.TEACHER_AVATOR) {
             teach_avator = response.content;
           }
@@ -381,9 +385,14 @@ export const ChatComponents = forwardRef(
             } else if (response.type === RESP_EVENT_TYPE.TEXT_END) {
               setIsStreaming(false);
               setTyping(false);
+              if (lastMsg) {
+                lastMsg.isComplete = true;
+                lastMsg.logid = response.log_id;
+                updateMsg(lastMsg.id, lastMsg);
+              }
               lastMsgRef.current = null;
-              lastMsg = null;
               if (isEnd) {
+                lastMsg = null;
                 return;
               }
             } else if (response.type === RESP_EVENT_TYPE.ACTIVE) {
@@ -448,7 +457,6 @@ export const ChatComponents = forwardRef(
               chapterUpdate?.({ id: chapterId, status, status_value });
               if (status_value === LESSON_STATUS_VALUE.COMPLETED) {
                 isEnd = true;
-                setLessonEnd(true);
                 setTyping(false);
               }
               if (status_value === LESSON_STATUS_VALUE.PREPARE_LEARNING) {
@@ -479,7 +487,7 @@ export const ChatComponents = forwardRef(
                 visible: content.visible,
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         });
       },
       [
@@ -522,14 +530,12 @@ export const ChatComponents = forwardRef(
     }, [chatId, initRecords, lessonId, loadedData, nextStep, scrollToBottom]);
 
     const resetAndLoadData = useCallback(async () => {
-      console.log('resetAndLoadData', chapterId);
       if (!chapterId) {
         return;
       }
       setIsStreaming(false);
       setTyping(false);
       setInputDisabled(true);
-      setLessonEnd(false);
       resetList();
       setInitRecords(null);
 
@@ -552,6 +558,7 @@ export const ChatComponents = forwardRef(
                 ...v,
                 id: `lesson-${newLessonId}`,
                 script_type: CHAT_MESSAGE_TYPE.LESSON_SEPARATOR,
+                logid: v.id,
               })
             );
           }
@@ -578,6 +585,7 @@ export const ChatComponents = forwardRef(
               ...v,
               id: i,
               script_type: CHAT_MESSAGE_TYPE.TEXT,
+              logid: v.id,
             },
             userInfo,
             teach_avator
@@ -616,7 +624,6 @@ export const ChatComponents = forwardRef(
     ]);
 
     useEffect(() => {
-      console.log('chat component loaded', chapterId, loadedChapterId);
       if (loadedChapterId !== chapterId) {
         setLoadedChapterId(chapterId);
         resetAndLoadData();
@@ -656,13 +663,7 @@ export const ChatComponents = forwardRef(
     useEffect(() => {
       if (window.ztDebug) {
         window.ztDebug.resend = () => {
-          setLastSendMsg((lastSendMsg) => {
-            if (lastSendMsg) {
-              nextStep({ ...lastSendMsg });
-            }
 
-            return lastSendMsg;
-          });
         };
 
         window.ztDebug.resendX = (
@@ -694,8 +695,7 @@ export const ChatComponents = forwardRef(
     }, [nextStep, onPayModalOpen]);
 
     const handleSend = useCallback(
-      async (type,display,  val, scriptId) => {
-        console.log('handleSend', type, display, val, scriptId);
+      async (type, display, val, scriptId) => {
         if (
           type === INTERACTION_OUTPUT_TYPE.TEXT ||
           type === INTERACTION_OUTPUT_TYPE.SELECT ||
@@ -712,7 +712,7 @@ export const ChatComponents = forwardRef(
               type: CHAT_MESSAGE_TYPE.TEXT,
               userInfo,
             });
-            appendMsg(message);
+            await appendMsg(message);
           }
         }
 
@@ -738,6 +738,59 @@ export const ChatComponents = forwardRef(
       refreshUserInfo();
     }, [handleSend, onPurchased, refreshUserInfo]);
 
+    const [interactionTypes, setInteractionTypes] = useState({});
+
+
+    const renderMessageContentOperation = useCallback(
+      (msg) => {
+        const likeClick = async () => {
+          setInteractionTypes((prevTypes) => {
+            const currentType = prevTypes[msg.id] ?? msg.interaction_type;
+            const updatedTypes = {
+              ...prevTypes,
+              [msg.id]: currentType === 1 ? 0 : 1,
+            };
+
+            scriptContentOperation(msg.logid, updatedTypes[msg.id]).then(() => { });
+            return updatedTypes;
+          });
+        };
+
+        const disClick = async () => {
+          setInteractionTypes((prevTypes) => {
+            const currentType = prevTypes[msg.id] ?? msg.interaction_type;
+            const updatedTypes = {
+              ...prevTypes,
+              [msg.id]: currentType === 2 ? 0 : 2,
+            };
+
+            scriptContentOperation(msg.logid, updatedTypes[msg.id]).then(() => { });
+            return updatedTypes;
+          });
+        };
+
+        const currentInteractionType =
+          interactionTypes[msg.id] ?? msg.interaction_type;
+
+        return (
+          <div className={styles.messageContentOperation}>
+            {currentInteractionType === 1 ? (
+              <LikeFilled className={styles.messageContentOperationIcon} onClick={likeClick} />
+            ) : (
+                <LikeOutlined className={styles.messageContentOperationIcon} onClick={likeClick} />
+            )}
+            {currentInteractionType === 2 ? (
+              <DislikeFilled className={styles.messageContentOperationIcon} onClick={disClick} />
+            ) : (
+                <DislikeOutlined className={styles.messageContentOperationIcon} onClick={disClick} />
+            )}
+          </div>
+        );
+      },
+      [interactionTypes, setInteractionTypes]
+    );
+
+
     const renderMessageContent = useCallback(
       (msg) => {
         const { content, type, ext } = msg;
@@ -748,6 +801,7 @@ export const ChatComponents = forwardRef(
         if (content === undefined) {
           return <></>;
         }
+        console.log(msg);
 
         if (type === CHAT_MESSAGE_TYPE.TEXT) {
           return (
@@ -759,16 +813,17 @@ export const ChatComponents = forwardRef(
                 onImageLoaded={onImageLoaded}
               />
               {ext?.active && <ActiveMessageControl {...ext.active} />}
+              {((msg.isComplete || msg.logid) && msg.position=='left') && renderMessageContentOperation(msg)}
             </div>
           );
         }
         return <></>;
       },
-      [isStreaming, mobileStyle, onImageLoaded]
+      [isStreaming, mobileStyle, onImageLoaded, renderMessageContentOperation]
     );
 
     const onChatInputSend = useCallback(
-      async (type,display, val, scriptId) => {
+      async (type, display, val, scriptId) => {
         if (type === INTERACTION_OUTPUT_TYPE.NEXT_CHAPTER) {
           onGoChapter?.(val.lessonId);
           return;
@@ -840,7 +895,6 @@ export const ChatComponents = forwardRef(
 
     useEffect(() => {
       const onGoToNavigationNode = (e) => {
-        console.log('onGoToNavigationNode', e.detail);
         const { chapterId, lessonId } = e.detail;
 
         if (chapterId !== loadedChapterId) {

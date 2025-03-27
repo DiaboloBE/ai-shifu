@@ -35,7 +35,9 @@ def generate_fix_output(
     prompt = ""
     if script_info.script_content_type == CONTENT_TYPE_IMAGE:
         prompt = "![img]({})".format(script_info.script_media_url)
-        yield make_script_dto("text", prompt, script_info.script_id)
+        yield make_script_dto(
+            "text", prompt, script_info.script_id, script_info.lesson_id
+        )
     else:
         prompt = get_fmt_prompt(
             app,
@@ -46,7 +48,9 @@ def generate_fix_output(
         if not prompt:
             prompt = ""
         for i in prompt:
-            msg = make_script_dto("text", i, script_info.script_id)
+            msg = make_script_dto(
+                "text", i, script_info.script_id, script_info.lesson_id
+            )
             yield msg
             time.sleep(0.01)
     log_script = generation_attend(app, attend, script_info)
@@ -57,6 +61,9 @@ def generate_fix_output(
     span.end(output=prompt)
     trace_args["output"] = trace_args["output"] + "\r\n" + prompt
     trace.update(**trace_args)
+    yield make_script_dto(
+        "text_end", "", script_info.script_id, script_info.lesson_id, log_script.log_id
+    )
 
 
 def generate_prompt_output(
@@ -100,13 +107,19 @@ def generate_prompt_output(
         current_content = chunk.result
         if isinstance(current_content, str):
             response_text += current_content
-            yield make_script_dto("text", current_content, script_info.script_id)
+            yield make_script_dto(
+                "text", current_content, script_info.script_id, script_info.lesson_id
+            )
     trace_args["output"] = trace_args["output"] + "\r\n" + response_text
     trace.update(**trace_args)
     log_script = generation_attend(app, attend, script_info)
     log_script.script_content = response_text
     log_script.script_role = ROLE_TEACHER
     db.session.add(log_script)
+    db.session.flush()  # 强制生成自增ID
+    yield make_script_dto(
+        "text_end", "", script_info.script_id, script_info.lesson_id, log_script.log_id
+    )
 
 
 OUTPUT_HANDLERS = {
@@ -146,7 +159,7 @@ def handle_output(
         yield from OUTPUT_HANDLERS[script_info.script_type](
             app, user_id, lesson, attend, script_info, trace, trace_args
         )
-        yield make_script_dto("text_end", "", script_info.script_id)
+
     else:
         raise AppException("script type not found")
     span = trace.span(name="output_script")
