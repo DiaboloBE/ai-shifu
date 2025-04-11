@@ -387,7 +387,9 @@ export const ChatComponents = forwardRef(
               setTyping(false);
               if (lastMsg) {
                 lastMsg.isComplete = true;
-                lastMsg.logid = response.log_id;
+                if (response.log_id) {
+                  lastMsg.logid = response.log_id;
+                }
                 updateMsg(lastMsg.id, lastMsg);
               }
               lastMsgRef.current = null;
@@ -775,14 +777,14 @@ export const ChatComponents = forwardRef(
         return (
           <div className={styles.messageContentOperation}>
             {currentInteractionType === 1 ? (
-              <LikeFilled className={styles.messageContentOperationIcon} onClick={likeClick} />
+              <LikeFilled className={styles.brandcolor} onClick={likeClick} />
             ) : (
-                <LikeOutlined className={styles.messageContentOperationIcon} onClick={likeClick} />
+                <LikeOutlined className={styles.brandcolor} onClick={likeClick} />
             )}
             {currentInteractionType === 2 ? (
-              <DislikeFilled className={styles.messageContentOperationIcon} onClick={disClick} />
+              <DislikeFilled className={styles.brandcolor} onClick={disClick} />
             ) : (
-                <DislikeOutlined className={styles.messageContentOperationIcon} onClick={disClick} />
+                <DislikeOutlined className={styles.brandcolor} onClick={disClick} />
             )}
           </div>
         );
@@ -801,8 +803,6 @@ export const ChatComponents = forwardRef(
         if (content === undefined) {
           return <></>;
         }
-        console.log(msg);
-
         if (type === CHAT_MESSAGE_TYPE.TEXT) {
           return (
             <div>
