@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { memo, useState } from 'react'
 import { Input } from '../ui/input'
 import { Plus, Trash } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -12,7 +12,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "../ui/alert-dialog"
-
+import { useTranslation } from 'react-i18next';
+import _ from 'lodash'
 
 interface ButtonProps {
     properties: {
@@ -28,16 +29,40 @@ interface ButtonProps {
         }[]
     }
     onChange: (properties: any) => void
+    onChanged?: (changed: boolean) => void
 }
 
-export default function Option(props: ButtonProps) {
-    const { properties } = props;
+const OptionPropsEqual = (prevProps: ButtonProps, nextProps: ButtonProps) => {
+    if (! _.isEqual(prevProps.properties, nextProps.properties)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.option_name, nextProps.properties.option_name)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.option_key, nextProps.properties.option_key)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.profile_key, nextProps.properties.profile_key)) {
+        return false
+    }
+    for (let i = 0; i < prevProps.properties.buttons.length; i++) {
+        if (!_.isEqual(prevProps.properties.buttons[i], nextProps.properties.buttons[i])) {
+            return false
+        }
+    }
+    return true
+}
+
+export default memo(function Option(props: ButtonProps) {
+    const { properties, onChanged } = props;
+    const [changed, setChanged] = useState(false);
+    const { t } = useTranslation();
     const { option_name, buttons } = properties;
     const [tempValue, setTempValue] = useState(option_name);
     const [tempButtons, setTempButtons] = useState(buttons.length === 0 ? [{
         "properties": {
-            "button_name": "全部",
-            "button_key": "全部"
+            "button_name": t('option.button-name'),
+            "button_key": t('option.button-key')
         },
         "type": "button"
     }] : buttons);
@@ -45,6 +70,10 @@ export default function Option(props: ButtonProps) {
     const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
     const onValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!changed) {
+            setChanged(true);
+            onChanged?.(true);
+        }
         setTempValue(e.target.value);
     }
 
@@ -81,8 +110,8 @@ export default function Option(props: ButtonProps) {
     const onAdd = (index: number) => {
         const newButton = {
             "properties": {
-                "button_name": "全部",
-                "button_key": "全部"
+                "button_name": t('option.button-name'),
+                "button_key": t('option.button-key')
             },
             "type": "button"
         }
@@ -114,37 +143,39 @@ export default function Option(props: ButtonProps) {
         if (tempButtons.length === 0) {
             const defaultButton = {
                 "properties": {
-                    "button_name": "全部",
-                    "button_key": "全部"
+                    "button_name": t('option.button-name'),
+                    "button_key": t('option.button-key')
                 },
                 "type": "button"
             };
             setTempButtons([defaultButton]);
         }
-        props.onChange({
+
+        const updatedProperties = {
             ...properties,
             option_name: tempValue,
             option_key: tempValue,
             buttons: tempButtons
-        });
+        };
+        props.onChange(updatedProperties);
     }
 
     return (
         <div className='flex flex-col space-y-1'>
             <div className='flex flex-row items-center'>
                 <span className='flex flex-row items-center whitespace-nowrap  w-[50px] shrink-0'>
-                    变量：
+                    {t('option.variable')}
                 </span>
-                <Input className='h-8 w-[400px]' placeholder='请输入' value={tempValue} onChange={onValueChange}></Input>
+                <Input className='h-8 w-[400px]' placeholder={t('option.variable-placeholder')} value={tempValue} onChange={onValueChange}></Input>
             </div>
             <div className='flex flex-col space-y-2'>
                 {
                     tempButtons.length === 0 ? (
                         <div className='flex flex-row items-center'>
                             <span className='flex flex-row items-center whitespace-nowrap  w-[50px] shrink-0'>
-                                值：
+                                {t('option.value')}
                             </span>
-                            <Input className='w-40' placeholder='请输入值' value="全部" onChange={(e) => {
+                            <Input className='w-40' placeholder={t('option.variable-placeholder')} value="全部" onChange={(e) => {
                                 const newButton = {
                                     "properties": {
                                         "button_name": "全部",
@@ -155,9 +186,9 @@ export default function Option(props: ButtonProps) {
                                 setTempButtons([newButton]);
                             }}></Input>
                             <span className='flex flex-row items-center whitespace-nowrap  w-[50px] ml-4'>
-                                标题：
+                                {t('option.title')}
                             </span>
-                            <Input className='w-40 ml-4' placeholder='请输入标题' value="全部" onChange={(e) => {
+                            <Input className='w-40 ml-4' placeholder={t('option.title-placeholder')} value="全部" onChange={(e) => {
                                 const newButton = {
                                     "properties": {
                                         "button_name": e.target.value,
@@ -176,11 +207,11 @@ export default function Option(props: ButtonProps) {
                             return (
                                 <div key={index} className='flex flex-row items-center'>
                                     <span className='flex flex-row items-center whitespace-nowrap  w-[50px] shrink-0'>
-                                        值：
+                                        {t('option.value')}
                                     </span>
                                     <Input value={button.properties.button_key} className='w-40' onChange={onButtonValueChange.bind(null, index)}></Input>
                                     <span className='flex flex-row items-center whitespace-nowrap  w-[50px] ml-4'>
-                                        标题：
+                                        {t('option.title')}
                                     </span>
                                     <Input value={button.properties.button_name} className='w-40 ml-4' onChange={onButtonTextChange.bind(null, index)}></Input>
                                     <Button className='h-8 w-8' variant="ghost" onClick={onAdd.bind(null, index)} >
@@ -202,23 +233,23 @@ export default function Option(props: ButtonProps) {
                     className='h-8 w-20'
                     onClick={handleConfirm}
                 >
-                    完成
+                    {t('option.complete')}
                 </Button>
             </div>
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>确认删除</AlertDialogTitle>
+                        <AlertDialogTitle>{t('option.confirm-delete')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            您的操作将会造成当前内容的丢失，是否确认？
+                            {t('option.confirm-delete-description')}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmDelete}>确认</AlertDialogAction>
+                        <AlertDialogCancel>{t('option.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete}>{t('option.confirm')}</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
         </div>
     )
-}
+},OptionPropsEqual)

@@ -1,7 +1,9 @@
 import React from 'react'
 import { Input } from '../ui/input'
-
-interface ButtonProps {
+import { useTranslation } from 'react-i18next';
+import { memo } from 'react'
+import _ from 'lodash'
+interface SingleInputProps {
     properties: {
         "input_name": string,
         "input_key": string,
@@ -10,11 +12,26 @@ interface ButtonProps {
     onChange: (properties: any) => void
 }
 
-export default function SingleInput(props: ButtonProps) {
-    const { properties } = props
+const SingleInputPropsEqual = (prevProps: SingleInputProps, nextProps: SingleInputProps) => {
+    if (! _.isEqual(prevProps.properties, nextProps.properties)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.input_name, nextProps.properties.input_name)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.input_key, nextProps.properties.input_key)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.input_placeholder, nextProps.properties.input_placeholder)) {
+        return false
+    }
+    return true
+}
 
+export default memo(function SingleInput(props: SingleInputProps) {
+    const { properties } = props
+    const { t } = useTranslation();
     const onValueChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-        console.log('onChange', properties);
         if (field === 'input_name') {
             props.onChange({
                 ...properties,
@@ -33,24 +50,24 @@ export default function SingleInput(props: ButtonProps) {
         <div className='flex flex-col space-y-2'>
             <div className='flex flex-row space-x-1 items-center'>
                 <span className='flex flex-row whitespace-nowrap'>
-                    输入框提示：
+                    {t('input.input-placeholder')}
                 </span>
                 <Input
                     className='h-8 w-40'
                     value={properties.input_placeholder}
                     onChange={(e) => onValueChange(e, 'input_placeholder')}
-                    placeholder="请输入"
+                    placeholder={t('input.input-placeholder')}
                 />
             </div>
             <div className='flex flex-row space-x-1 items-center'>
                 <span className='flex flex-row whitespace-nowrap'>
-                    输入框名称：
+                    {t('input.input-name')}
                 </span>
                 <Input
                     className='h-8 w-40'
                     value={properties.input_name}
                     onChange={(e) => onValueChange(e, 'input_name')}
-                    placeholder="请输入"
+                    placeholder={t('input.input-name')}
                 // type="tel"
                 // placeholder={properties.input_placeholder}
                 />
@@ -58,4 +75,4 @@ export default function SingleInput(props: ButtonProps) {
 
         </div>
     )
-}
+},SingleInputPropsEqual)

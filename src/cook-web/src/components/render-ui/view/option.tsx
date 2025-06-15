@@ -1,5 +1,7 @@
 import React from 'react'
-
+import { useTranslation } from 'react-i18next';
+import { memo } from 'react'
+import _ from 'lodash'
 interface OptionViewProps {
     properties: {
         "option_name": string,
@@ -14,13 +16,36 @@ interface OptionViewProps {
         }>
     }
 }
+const OptionViewPropsEqual = (prevProps: OptionViewProps, nextProps: OptionViewProps) => {
+    if (! _.isEqual(prevProps.properties, nextProps.properties)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.option_name, nextProps.properties.option_name)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.option_key, nextProps.properties.option_key)) {
+        return false
+    }
+    if (! _.isEqual(prevProps.properties.profile_key, nextProps.properties.profile_key)) {
+        return false
+    }
+    for (let i = 0; i < prevProps.properties.buttons.length; i++) {
+        if (prevProps.properties.buttons[i].properties.button_name !== nextProps.properties.buttons[i].properties.button_name
+            || prevProps.properties.buttons[i].properties.button_key !== nextProps.properties.buttons[i].properties.button_key
+        ) {
+            return false
+        }
+    }
+    return true
+}
 
-export default function OptionView(props: OptionViewProps) {
+export default memo(function OptionView(props: OptionViewProps) {
     const { properties } = props
+    const { t } = useTranslation();
     return (
         <div className='flex flex-col space-y-2'>
             <div className='flex flex-row items-center space-x-1'>
-                <span className='whitespace-nowrap'>变量名：</span>
+                <span className='whitespace-nowrap'>{t('option.option-name')}</span>
                 <div className='px-3 py-2 bg-gray-50 rounded-md'>
                     {properties.option_name}
                 </div>
@@ -38,4 +63,4 @@ export default function OptionView(props: OptionViewProps) {
             </div>
         </div>
     )
-}
+},OptionViewPropsEqual)

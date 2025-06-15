@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react'
 
 import OutlineSelector from '@/components/outline-selector'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { useScenario } from '@/store'
-import { Outline } from '@/types/scenario'
+import { useShifu } from '@/store'
+import { Outline } from '@/types/shifu'
 import api from '@/api'
 import { Button } from '../ui/button'
-
+import { useTranslation } from 'react-i18next';
+import { memo } from 'react'
+import _ from 'lodash'
 interface ColorSetting {
     color: string;
     text_color: string;
@@ -33,20 +35,46 @@ interface GotoProps {
         "button_key": string
     }
     onChange: (properties: any) => void
+    onChanged?: (changed: boolean) => void
 }
 
-export default function Goto(props: GotoProps) {
-    const { properties } = props
-    const {
-        chapters,
-        currentScenario
-    } = useScenario();
+const GotoPropsEqual = (prevProps: GotoProps, nextProps: GotoProps) => {
+    if (! _.isEqual(prevProps.properties, nextProps.properties)) {
+        return false
+    }
+    if (!_.isEqual(prevProps.properties.goto_settings.profile_key, nextProps.properties.goto_settings.profile_key)) {
+        return false
+    }
+
+    if (!_.isEqual(prevProps.properties.goto_settings.items, nextProps.properties.goto_settings.items)) {
+        return false
+    }
+    for (let i = 0; i < prevProps.properties.goto_settings.items.length; i++) {
+        if (!_.isEqual(prevProps.properties.goto_settings.items[i].value, nextProps.properties.goto_settings.items[i].value)
+            || !_.isEqual(prevProps.properties.goto_settings.items[i].goto_id, nextProps.properties.goto_settings.items[i].goto_id)
+            || !_.isEqual(prevProps.properties.goto_settings.items[i].type, nextProps.properties.goto_settings.items[i].type)
+        ) {
+            return false
+        }
+    }
+
+    return true
+}
+export default memo(function Goto(props: GotoProps) {
+    const { properties, onChanged } = props
+    const [changed, setChanged] = useState(false);
+    const { t } = useTranslation();
+    const { chapters, currentShifu } = useShifu();
 
     const [profileItemDefinations, setProfileItemDefinations] = useState<ProfileItemDefination[]>([]);
     const [selectedProfile, setSelectedProfile] = useState<ProfileItemDefination | null>(null);
-    const [tempGotoSettings, setTempGotoSettings] = useState(properties.goto_settings);
+    const [tempGotoSettings, setTempGotoSettings] = useState(properties.goto_settings || {
+        items: [],
+        profile_key: ""
+    });
 
     const onNodeSelect = (index: number, node: Outline) => {
+
         setTempGotoSettings({
             ...tempGotoSettings,
             items: tempGotoSettings.items.map((item, i) => {
@@ -70,12 +98,12 @@ export default function Goto(props: GotoProps) {
 
     const loadProfileItemDefinations = async (preserveSelection: boolean = false) => {
         const list = await api.getProfileItemDefinitions({
-            parent_id: currentScenario?.id
+            parent_id: currentShifu?.shifu_id
         })
         setProfileItemDefinations(list)
 
         if (!preserveSelection && list.length > 0) {
-            const initialSelected = list.find((item) => item.profile_key === properties.goto_settings.profile_key);
+            const initialSelected = list.find((item) => item.profile_key === properties.goto_settings?.profile_key);
             if (initialSelected) {
                 setSelectedProfile(initialSelected);
                 await loadProfileItem(initialSelected.profile_id, initialSelected.profile_key);
@@ -87,7 +115,6 @@ export default function Goto(props: GotoProps) {
         const list = await api.getProfileItemOptionList({
             parent_id: id
         })
-        // 更新临时变量
         setTempGotoSettings({
             profile_key: name,
             items: list.map((item) => {
@@ -105,6 +132,10 @@ export default function Goto(props: GotoProps) {
     }, [])
 
     const handleValueChange = async (value: string) => {
+        if (!changed) {
+            setChanged(true);
+            onChanged?.(true);
+        }
         const selectedItem = profileItemDefinations.find((item) => item.profile_id === value);
         if (selectedItem) {
             setSelectedProfile(selectedItem);
@@ -116,7 +147,7 @@ export default function Goto(props: GotoProps) {
         <div className='flex flex-col space-y-1'>
             <div className='flex flex-row items-center space-x-1'>
                 <div className='flex flex-row whitespace-nowrap w-[70px] shrink-0'>
-                    变量选择：
+                    {t('goto.select-variable')}
                 </div>
                 <Select
                     value={selectedProfile?.profile_id || ""}
@@ -129,7 +160,7 @@ export default function Goto(props: GotoProps) {
                 >
                     <SelectTrigger className="h-8 w-[170px]">
                         <SelectValue>
-                            {selectedProfile?.profile_key || "选择变量"}
+                            {selectedProfile?.profile_key || t('goto.select-variable')}
                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -143,7 +174,7 @@ export default function Goto(props: GotoProps) {
             </div>
             <div className='flex flex-row items-start py-2'>
                 <div className='flex flex-row whitespace-nowrap w-[70px] shrink-0'>
-                    跳转位置：
+                    {t('goto.goto-settings')}
                 </div>
                 <div className='flex flex-col space-y-1 '>
                     {
@@ -151,7 +182,7 @@ export default function Goto(props: GotoProps) {
                             return (
                                 <div className='flex flex-row items-center space-x-2' key={`${item.value}-${index}`}>
                                     <span className='w-40'>{item.value}</span>
-                                    <span className='px-2'>跳转到</span>
+                                    <span className='px-2'>{t('goto.goto-settings-jump-to')}</span>
                                     <span>
                                         <OutlineSelector value={item.goto_id} chapters={chapters} onSelect={onNodeSelect.bind(null, index)} />
                                     </span>
@@ -168,9 +199,9 @@ export default function Goto(props: GotoProps) {
                     className='h-8 w-20'
                     onClick={handleConfirm}
                 >
-                    完成
+                    {t('goto.complete')}
                 </Button>
             </div>
         </div>
     )
-}
+},GotoPropsEqual)

@@ -1,5 +1,5 @@
-import '@chatui/core/dist/index.css';
-import Chat, { useMessages } from '@chatui/core';
+import '@ai-shifu/chatui/dist/index.css';
+import Chat, { useMessages } from '@ai-shifu/chatui';
 import { LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled } from '@ant-design/icons';
 import {
   useEffect,
@@ -332,8 +332,10 @@ export const ChatComponents = forwardRef(
         let isEnd = false;
         let teach_avator = null;
         let lastLessonId = messageLessonId;
+        let lastActiveMsg = null;
 
         runScript(chatId, lessonId, val, type, scriptId, async (response) => {
+
           if (response.type === RESP_EVENT_TYPE.TEACHER_AVATOR) {
             teach_avator = response.content;
           }
@@ -389,6 +391,10 @@ export const ChatComponents = forwardRef(
                   lastMsg.logid = response.log_id;
                 }
                 updateMsg(lastMsg.id, lastMsg);
+                // lastMsg = null;
+                lastActiveMsg = lastMsg;
+                lastMsg = null;
+                lastMsgRef.current = null;
               }
               lastMsgRef.current = null;
               if (isEnd) {
@@ -396,12 +402,13 @@ export const ChatComponents = forwardRef(
                 return;
               }
             } else if (response.type === RESP_EVENT_TYPE.ACTIVE) {
-              if (lastMsg) {
-                lastMsg.ext = {
-                  ...lastMsg.ext,
+              if (lastActiveMsg) {
+                lastActiveMsg.ext = {
+                  ...lastActiveMsg.ext,
                   active: convertKeysToCamelCase(response.content),
                 };
-                updateMsg(lastMsg.id, lastMsg);
+                updateMsg(lastActiveMsg.id, lastActiveMsg);
+                lastActiveMsg = null;
               }
             } else if (
               response.type === RESP_EVENT_TYPE.INPUT ||
@@ -504,12 +511,6 @@ export const ChatComponents = forwardRef(
       ]
     );
 
-    const onImageLoaded = useCallback(() => {
-      if (!autoScroll) {
-        return;
-      }
-      scrollToBottom();
-    }, [autoScroll, scrollToBottom]);
 
     useEffect(() => {
       if (!loadedData) {
@@ -808,7 +809,6 @@ export const ChatComponents = forwardRef(
                 content={content}
                 isStreaming={isStreaming}
                 mobileStyle={mobileStyle}
-                onImageLoaded={onImageLoaded}
               />
               {ext?.active && <ActiveMessageControl {...ext.active} />}
               {((msg.isComplete || msg.logid) && msg.position == 'left') && renderMessageContentOperation(msg)}
@@ -817,7 +817,7 @@ export const ChatComponents = forwardRef(
         }
         return <></>;
       },
-      [isStreaming, mobileStyle, onImageLoaded, renderMessageContentOperation]
+      [isStreaming, mobileStyle, renderMessageContentOperation]
     );
 
     const onChatInputSend = useCallback(
