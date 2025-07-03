@@ -28,11 +28,11 @@ from flaskr.service.profile.models import ProfileItem
 from flaskr.service.study.utils import ModelSetting
 
 
-def safe_get_temprature(app: Flask, profile_item: ProfileItem):
+def safe_get_temperature(app: Flask, profile_item: ProfileItem):
     try:
         return float(profile_item.profile_prompt_model_args)
     except Exception as e:
-        app.logger.error(f"safe_get_temprature error: {e}")
+        app.logger.error(f"safe_get_temperature error: {e}")
         return 0.3
 
 
@@ -69,7 +69,7 @@ def handle_input_text(
         ):
             model_setting = ModelSetting(
                 profile_item.profile_prompt_model,
-                {"temperature": safe_get_temprature(app, profile_item)},
+                {"temperature": safe_get_temperature(app, profile_item)},
             )
             check_prompt_template = profile_item.profile_prompt
 
@@ -208,7 +208,7 @@ def handle_input_text(
             log_script.log_id,
         )
         yield make_script_dto(
-            "input",
+            "sys_user_input",
             script_info.script_ui_content,
             script_info.script_id,
             script_info.lesson_id,

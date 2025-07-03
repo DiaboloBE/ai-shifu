@@ -1,6 +1,6 @@
 import '@ai-shifu/chatui/dist/index.css';
 import Chat, { useMessages } from '@ai-shifu/chatui';
-import { LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled } from '@ant-design/icons';
+import { LikeOutlined, DislikeOutlined, LikeFilled, DislikeFilled, ReloadOutlined } from '@ant-design/icons';
 import {
   useEffect,
   forwardRef,
@@ -60,7 +60,8 @@ const createMessage = ({
   interaction_type,
   logid,
   type = CHAT_MESSAGE_TYPE.TEXT,
-  teach_avator,
+  teacher_avatar,
+  script_id,
 }) => {
   const mid = id || genUuid();
   if (type === CHAT_MESSAGE_TYPE.LESSON_SEPARATOR) {
@@ -69,11 +70,12 @@ const createMessage = ({
       id: mid,
       type: CHAT_MESSAGE_TYPE.LESSON_SEPARATOR,
       content: content,
+      script_id,
     };
   }
   const position = role === USER_ROLE.STUDENT ? 'right' : 'left';
 
-  let avatar = teach_avator || logoColor120;
+  let avatar = teacher_avatar || logoColor120;
 
   if (role === USER_ROLE.STUDENT) {
     avatar = null;
@@ -87,12 +89,13 @@ const createMessage = ({
     isComplete: false,
     logid,
     type,
-    position,
+    position: position === 'left' ? 'left' : 'right',
     user: { avatar },
+    script_id,
   };
 };
 
-const convertMessage = (serverMessage, userInfo, teach_avator) => {
+const convertMessage = (serverMessage, userInfo, teacher_avatar) => {
   if (serverMessage.script_type === CHAT_MESSAGE_TYPE.TEXT) {
     return createMessage({
       id: serverMessage.id,
@@ -101,9 +104,8 @@ const convertMessage = (serverMessage, userInfo, teach_avator) => {
       interaction_type: serverMessage.interaction_type,
       logid: serverMessage.logid,
       type: serverMessage.script_type,
-      userInfo,
-      teach_avator,
-      isComplete: true,
+      teacher_avatar,
+      script_id: serverMessage.script_id,
     });
   } else if (serverMessage.script_type === CHAT_MESSAGE_TYPE.LESSON_SEPARATOR) {
     return createMessage({
@@ -113,13 +115,22 @@ const convertMessage = (serverMessage, userInfo, teach_avator) => {
       type: serverMessage.script_type,
       interaction_type: serverMessage.interaction_type,
       logid: serverMessage.logid,
-      userInfo,
-      teach_avator,
-      isComplete: true,
+      teacher_avatar,
+      script_id: serverMessage.script_id,
     });
   }
 
-  return {};
+  // Default case - should not reach here in normal flow
+  return createMessage({
+    id: serverMessage.id || '',
+    role: serverMessage.script_role || USER_ROLE.TEACHER,
+    content: serverMessage.script_content || '',
+    interaction_type: serverMessage.interaction_type,
+    logid: serverMessage.logid,
+    type: serverMessage.script_type || CHAT_MESSAGE_TYPE.TEXT,
+    teacher_avatar,
+    script_id: serverMessage.script_id,
+  });
 };
 
 const convertEventInputModal = ({ type, content, script_id }) => {
@@ -294,7 +305,7 @@ export const ChatComponents = forwardRef(
     }, []);
 
     const lessonUpdateResp = useCallback(
-      (response, isEnd, nextStepFunc) => {
+      (response, isEnd, nextStep) => {
         const content = response.content;
         lessonUpdate?.({
           id: content.lesson_id,
@@ -307,11 +318,12 @@ export const ChatComponents = forwardRef(
           content.status_value === LESSON_STATUS_VALUE.PREPARE_LEARNING &&
           !isEnd
         ) {
-          nextStepFunc({
+          nextStep({
             chatId,
             lessonId: content.lesson_id,
             type: INTERACTION_OUTPUT_TYPE.START,
             val: '',
+            scriptId: undefined,
           });
         }
 
@@ -330,14 +342,14 @@ export const ChatComponents = forwardRef(
         }));
         let lastMsg = null;
         let isEnd = false;
-        let teach_avator = null;
+        let teacher_avatar = null;
         let lastLessonId = messageLessonId;
         let lastActiveMsg = null;
 
         runScript(chatId, lessonId, val, type, scriptId, async (response) => {
 
           if (response.type === RESP_EVENT_TYPE.TEACHER_AVATOR) {
-            teach_avator = response.content;
+            teacher_avatar = response.content;
           }
 
           const scriptId = response.script_id;
@@ -376,8 +388,10 @@ export const ChatComponents = forwardRef(
                   type: response.type,
                   role: USER_ROLE.TEACHER,
                   content: response.content,
-                  userInfo,
-                  teach_avator: teach_avator,
+                  interaction_type: undefined,
+                  logid: undefined,
+                  teacher_avatar: teacher_avatar,
+                  script_id: response.script_id,
                 });
                 appendMsg(lastMsg);
                 lastMsgRef.current = lastMsg;
@@ -389,6 +403,9 @@ export const ChatComponents = forwardRef(
                 lastMsg.isComplete = true;
                 if (response.log_id) {
                   lastMsg.logid = response.log_id;
+                }
+                if (response.script_id) {
+                  lastMsg.script_id = response.script_id;
                 }
                 updateMsg(lastMsg.id, lastMsg);
                 // lastMsg = null;
@@ -449,6 +466,11 @@ export const ChatComponents = forwardRef(
                     id: `lesson-${newLessonId}`,
                     type: CHAT_MESSAGE_TYPE.LESSON_SEPARATOR,
                     content: { lessonId: newLessonId },
+                    role: USER_ROLE.TEACHER,
+                    interaction_type: undefined,
+                    logid: undefined,
+                    teacher_avatar: undefined,
+                    script_id: response.script_id,
                   });
                   appendMsg(msg);
                   lastLessonId = newLessonId;
@@ -507,7 +529,6 @@ export const ChatComponents = forwardRef(
         trackTrailProgress,
         updateMsg,
         updateUserInfo,
-        userInfo,
       ]
     );
 
@@ -525,6 +546,7 @@ export const ChatComponents = forwardRef(
           lessonId: lessonId,
           type: INTERACTION_OUTPUT_TYPE.START,
           val: '',
+          scriptId: undefined,
         });
       }
       setLoadedData(false);
@@ -542,7 +564,7 @@ export const ChatComponents = forwardRef(
 
       const resp = await getLessonStudyRecord(chapterId);
       const records = resp.data?.records || [];
-      const teach_avator = resp.data?.teach_avator || null;
+      const teacher_avatar = resp.data?.teacher_avatar || null;
       setInitRecords(records);
       const ui = resp.data?.ui || null;
 
@@ -554,14 +576,19 @@ export const ChatComponents = forwardRef(
           const newLessonId = v.lesson_id;
           if (newLessonId !== lessonId && !!newLessonId) {
             lessonId = newLessonId;
-            appendMsg(
-              convertMessage({
+            const msgObj = convertMessage(
+              {
                 ...v,
                 id: `lesson-${newLessonId}`,
                 script_type: CHAT_MESSAGE_TYPE.LESSON_SEPARATOR,
                 logid: v.id,
-              })
+              },
+              userInfo,
+              teacher_avatar
             );
+            if (msgObj && msgObj.type) {
+              appendMsg(msgObj);
+            }
           }
 
           if (v.script_type === CHAT_MESSAGE_TYPE.ACTIVE) {
@@ -589,10 +616,12 @@ export const ChatComponents = forwardRef(
               logid: v.id,
             },
             userInfo,
-            teach_avator
+            teacher_avatar
           );
-          appendMsg(newMessage);
-          lastMsg = newMessage;
+          if (newMessage && newMessage.type) {
+            appendMsg(newMessage);
+            lastMsg = newMessage;
+          }
         });
 
         setMessageLessonId(lessonId);
@@ -711,7 +740,10 @@ export const ChatComponents = forwardRef(
               role: USER_ROLE.STUDENT,
               content: val,
               type: CHAT_MESSAGE_TYPE.TEXT,
-              userInfo,
+              interaction_type: undefined,
+              logid: undefined,
+              teacher_avatar: undefined,
+              script_id: scriptId,
             });
             await appendMsg(message);
           }
@@ -729,12 +761,11 @@ export const ChatComponents = forwardRef(
         nextStep,
         scrollToBottom,
         setTyping,
-        userInfo,
       ]
     );
 
     const onPayModalOk = useCallback(() => {
-      handleSend(INTERACTION_OUTPUT_TYPE.ORDER);
+      handleSend(INTERACTION_OUTPUT_TYPE.ORDER, false, '', undefined);
       onPurchased?.();
       refreshUserInfo();
     }, [handleSend, onPurchased, refreshUserInfo]);
@@ -770,6 +801,51 @@ export const ChatComponents = forwardRef(
           });
         };
 
+        const reloadClick = async () => {
+          // Regenerate current conversation block
+          if (!msg.script_id) {
+            // Could add a prompt: script_id not found, cannot reload
+            return;
+          }
+
+          // Call runScript directly, not through nextStep, to avoid entering main flow
+          let isEnd = false;
+
+          // Clear current message content, prepare for regeneration
+          const updatedMsg = { ...msg, content: '', isComplete: false };
+          updateMsg(msg.id, updatedMsg);
+
+          runScript(chatId, lessonId, '', INTERACTION_OUTPUT_TYPE.CONTINUE, undefined, async (response) => {
+            try {
+              if (response.type === RESP_EVENT_TYPE.TEXT) {
+                if (isEnd) {
+                  return;
+                }
+                setIsStreaming(true);
+
+                // Update current message content directly
+                const currText = fixMarkdownStream(
+                  updatedMsg.content,
+                  response.content
+                );
+                updatedMsg.content = updatedMsg.content + currText;
+                updateMsg(msg.id, updatedMsg);
+              } else if (response.type === RESP_EVENT_TYPE.TEXT_END) {
+                setIsStreaming(false);
+                updatedMsg.isComplete = true;
+                if (response.log_id) {
+                  updatedMsg.logid = response.log_id;
+                }
+                updateMsg(msg.id, updatedMsg);
+                if (isEnd) {
+                  return;
+                }
+              }
+              // Don't handle other event types to avoid interfering with main flow
+            } catch (e) { }
+          }, msg.script_id);
+        };
+
         const currentInteractionType =
           interactionTypes[msg.id] ?? msg.interaction_type;
 
@@ -785,10 +861,11 @@ export const ChatComponents = forwardRef(
             ) : (
               <DislikeOutlined className={styles.brandcolor} onClick={disClick} />
             )}
+            <ReloadOutlined  className={styles.brandcolor} onClick={reloadClick} />
           </div>
         );
       },
-      [interactionTypes, setInteractionTypes]
+      [interactionTypes, setInteractionTypes, chatId, lessonId, updateMsg, runScript, setIsStreaming, fixMarkdownStream]
     );
 
 
@@ -888,7 +965,7 @@ export const ChatComponents = forwardRef(
 
     const onLogin = useCallback(async () => {
       await refreshUserInfo();
-      handleSend(INTERACTION_OUTPUT_TYPE.LOGIN, false, t('chat.loginSuccess'));
+      handleSend(INTERACTION_OUTPUT_TYPE.LOGIN, false, t('chat.loginSuccess'), undefined);
     }, [handleSend, refreshUserInfo, t]);
 
     useEffect(() => {
