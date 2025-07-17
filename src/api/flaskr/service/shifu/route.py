@@ -43,9 +43,15 @@ class ShifuPermission(Enum):
 
 # Shifu permission verification decorator
 # @ShifuTokenValidation(ShifuPermission.xxx)
+# If is_creator is true, only verify whether there is creator permission
 class ShifuTokenValidation:
-    def __init__(self, permission: ShifuPermission = ShifuPermission.VIEW):
+    def __init__(
+        self,
+        permission: ShifuPermission = ShifuPermission.VIEW,
+        is_creator: bool = False,
+    ):
         self.permission = permission
+        self.is_creator = is_creator
 
     def __call__(self, f):
         @wraps(f)
@@ -57,6 +63,13 @@ class ShifuTokenValidation:
                 token = request.headers.get("Token", None)
             if not token and request.method.upper() == "POST" and request.is_json:
                 token = request.get_json().get("token", None)
+
+            if not request.user.is_creator:
+                raise_error("SHIFU.NO_PERMISSION")
+
+            # If is_creator is True, only verify creator permission and skip shifu-specific verification
+            if self.is_creator:
+                return f(*args, **kwargs)
 
             shifu_bid = request.view_args.get("shifu_bid", None)
             if not shifu_bid:
@@ -70,6 +83,7 @@ class ShifuTokenValidation:
                 raise_param_error("shifu_bid is required")
 
             user_id = request.user.user_id
+
             app = current_app._get_current_object()
             has_permission = shifu_permission_verification(
                 app, user_id, shifu_bid, self.permission.value
@@ -87,6 +101,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
     app.logger.info(f"register shifu routes {path_prefix}")
 
     @app.route(path_prefix + "/shifus", methods=["GET"])
+    @ShifuTokenValidation(ShifuPermission.VIEW, is_creator=True)
     def get_shifu_list_api():
         """
         get shifu list
@@ -142,6 +157,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
         )
 
     @app.route(path_prefix + "/shifus", methods=["PUT"])
+    @ShifuTokenValidation(ShifuPermission.VIEW, is_creator=True)
     def create_shifu_api():
         """
         create shifu
@@ -307,6 +323,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
         )
 
     @app.route(path_prefix + "/shifus/<shifu_bid>/favorite", methods=["POST"])
+    @ShifuTokenValidation(ShifuPermission.VIEW, is_creator=True)
     def mark_favorite_shifu_api():
         """
         mark favorite shifu
@@ -545,7 +562,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
         parent_bid = request.get_json().get("parent_bid")
         name = request.get_json().get("name")
         description = request.get_json().get("description", "")
-        outline_type = request.get_json().get("type", UNIT_TYPE_TRIAL)
+        type = request.get_json().get("type", UNIT_TYPE_TRIAL)
         index = request.get_json().get("index", None)
         system_prompt = request.get_json().get("system_prompt", None)
         is_hidden = request.get_json().get("is_hidden", False)
@@ -558,7 +575,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
                 name,
                 description,
                 index,
-                outline_type,
+                type,
                 system_prompt,
                 is_hidden,
             )
@@ -622,7 +639,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
         index = request.get_json().get("index")
         system_prompt = request.get_json().get("system_prompt", None)
         is_hidden = request.get_json().get("is_hidden", False)
-        unit_type = request.get_json().get("type", UNIT_TYPE_TRIAL)
+        type = request.get_json().get("type", UNIT_TYPE_TRIAL)
         return make_common_response(
             modify_unit(
                 app,
@@ -633,7 +650,7 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
                 index,
                 system_prompt,
                 is_hidden,
-                unit_type,
+                type,
             )
         )
 
@@ -872,6 +889,12 @@ def register_shifu_routes(app: Flask, path_prefix="/api/shifu"):
         user_id = request.user.user_id
         block = request.get_json().get("block")
         block_index = request.get_json().get("block_index")
+        if block is None:
+            raise_param_error("block is required")
+        if block_index is None:
+            raise_param_error("block_index is required")
+        if not block.get("type"):
+            raise_param_error("block type is required")
         return make_common_response(
             add_block(app, user_id, outline_bid, block, block_index)
         )

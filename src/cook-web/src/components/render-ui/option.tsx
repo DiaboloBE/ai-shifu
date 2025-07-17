@@ -1,151 +1,139 @@
-import React, { memo, useState } from 'react'
+import React, { memo, useEffect, useState } from 'react'
 import { Input } from '../ui/input'
-import { Plus, Trash } from 'lucide-react'
 import { Button } from '../ui/button'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "../ui/alert-dialog"
 import { useTranslation } from 'react-i18next';
 import _ from 'lodash'
-import { ProfileFormItem } from '@/components/profiles'
+import { OptionsDTO, ProfileItemDefination, UIBlockDTO } from '@/types/shifu'
+import i18n from '@/i18n'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { useShifu } from '@/store'
+import api from '@/api'
 
-interface ButtonProps {
-    properties: {
-        "profile_id": string,
-        "buttons": {
-            "properties": {
-                "button_name": string,
-                "button_key": string,
-            },
-            "type": string
-        }[]
-    }
-    onChange: (properties: any) => void
-    onChanged?: (changed: boolean) => void
-}
-
-const OptionPropsEqual = (prevProps: ButtonProps, nextProps: ButtonProps) => {
-    if (! _.isEqual(prevProps.properties, nextProps.properties)) {
+const OptionPropsEqual = (prevProps: UIBlockDTO, nextProps: UIBlockDTO) => {
+    const prevOptionsSettings = prevProps.data.properties as OptionsDTO
+    const nextOptionsSettings = nextProps.data.properties as OptionsDTO
+    if (!_.isEqual(prevProps.data, nextProps.data)) {
         return false
     }
-    if (! _.isEqual(prevProps.properties.profile_id, nextProps.properties.profile_id)) {
+    if (!_.isEqual(prevOptionsSettings.result_variable_bid, nextOptionsSettings.result_variable_bid)) {
         return false
     }
-    for (let i = 0; i < prevProps.properties.buttons.length; i++) {
-        if (!_.isEqual(prevProps.properties.buttons[i], nextProps.properties.buttons[i])) {
+    for (let i = 0; i < prevOptionsSettings.options.length; i++) {
+        if (!_.isEqual(prevOptionsSettings.options[i], nextOptionsSettings.options[i])) {
             return false
         }
     }
     return true
 }
 
-export default memo(function Option(props: ButtonProps) {
-    const { properties } = props;
-    // const [changed, setChanged] = useState(false);
+export default memo(function Option(props: UIBlockDTO) {
+    const { data, onChanged } = props;
+    const { currentShifu } = useShifu();
     const { t } = useTranslation();
-    const { profile_id, buttons } = properties;
-    const [tempValue, setTempValue] = useState<string>(profile_id);
-    const [tempButtons, setTempButtons] = useState(buttons.length === 0 ? [{
-        "properties": {
-            "button_name": t('option.button-name'),
-            "button_key": t('option.button-key')
-        },
-        "type": "button"
-    }] : buttons);
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-    const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
-
-    const onButtonValueChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-        setTempButtons(tempButtons.map((button: any, i: number) => {
-            if (i === index) {
-                return {
-                    ...button,
-                    properties: {
-                        ...button.properties,
-                        button_key: e.target.value
-                    }
-                }
-            }
-            return button;
-        }));
-    }
+    const [changed, setChanged] = useState(false);
+    const optionsSettings = data.properties as OptionsDTO
+    const [tempOptions, setTempOptions] = useState(optionsSettings.options);
+    const [selectedProfile, setSelectedProfile] = useState<ProfileItemDefination | null>(null);
+    const [profileItemDefinations, setProfileItemDefinations] = useState<ProfileItemDefination[]>([]);
+    const [variableBid, setVariableBid] = useState<string>(optionsSettings.result_variable_bid);
 
     const onButtonTextChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-        setTempButtons(tempButtons.map((button: any, i: number) => {
+        setTempOptions(tempOptions.map((option: any, i: number) => {
             if (i === index) {
                 return {
-                    ...button,
-                    properties: {
-                        ...button.properties,
-                        button_name: e.target.value,
+                    ...option,
+                    label: {
+                        ...option.label,
+                        lang: {
+                            ...option.label.lang,
+                            "zh-CN": e.target.value,
+                            "en-US": e.target.value
+                        }
                     }
                 }
             }
-            return button;
+            return option;
         }));
-    }
-
-    const onAdd = (index: number) => {
-        const newButton = {
-            "properties": {
-                "button_name": t('option.button-name'),
-                "button_key": t('option.button-key')
-            },
-            "type": "button"
-        }
-        setTempButtons([
-            ...tempButtons.slice(0, index + 1),
-            newButton,
-            ...tempButtons.slice(index + 1)
-        ]);
-    }
-
-    const onDelete = (index: number) => {
-        if (tempButtons.length === 1) {
-            setDeleteIndex(index);
-            setShowDeleteDialog(true);
-        } else {
-            setTempButtons(tempButtons.filter((_: any, i: number) => i !== index));
-        }
-    }
-
-    const handleConfirmDelete = () => {
-        if (deleteIndex !== null) {
-            setTempButtons(tempButtons.filter((_: any, i: number) => i !== deleteIndex));
-            setShowDeleteDialog(false);
-            setDeleteIndex(null);
-        }
     }
 
     const handleConfirm = () => {
-        if (tempButtons.length === 0) {
+        if (tempOptions.length === 0) {
             const defaultButton = {
-                "properties": {
-                    "button_name": t('option.button-name'),
-                    "button_key": t('option.button-key')
-                },
-                "type": "button"
+                "value": t('option.button-key'),
+                "label": {
+                    "lang": {
+                        'zh-CN': t('option.button-name'),
+                        'en-US': t('option.button-name')
+                    },
+                }
             };
-            setTempButtons([defaultButton]);
+            setTempOptions([defaultButton]);
         }
 
         const updatedProperties = {
-            ...properties,
-            profile_id: tempValue,
-            buttons: tempButtons
-        };
-        props.onChange(updatedProperties);
+            ...data,
+            properties: {
+                ...data.properties,
+                options: tempOptions,
+                result_variable_bid: variableBid
+            },
+            variable_bids: [variableBid]
+        }
+        props.onPropertiesChange(updatedProperties);
     }
 
-    const handleProfileChange = (value: string[]) => {
-        setTempValue(value?.[0])
+    const handleValueChange = async (value: string) => {
+        setVariableBid(value);
+        if (!changed) {
+            setChanged(true);
+            onChanged?.(true);
+        }
+        const selectedItem = profileItemDefinations.find((item) => item.profile_id === value);
+        if (selectedItem) {
+            setSelectedProfile(selectedItem);
+            await loadProfileItem(value);
+        }
+    }
+    useEffect(() => {
+        loadProfileItemDefinations();
+    }, [])
+    const loadProfileItem = async (id: string) => {
+        setVariableBid(id);
+        const list = await api.getProfileItemOptionList({
+            parent_id: id
+        })
+        const options = list.map((item) => {
+            const existingOption = tempOptions.find((option) => option.value === item.value);
+            if (existingOption) {
+                return existingOption;
+            }
+            return {
+                value: item.value,
+                label: {
+                    lang: {
+                        "zh-CN": item.value,
+                        "en-US": item.value
+                    }
+                }
+            }
+        })
+
+        setTempOptions(options);
+    }
+
+    const loadProfileItemDefinations = async (preserveSelection: boolean = false) => {
+        const list = await api.getProfileItemDefinitions({
+            parent_id: currentShifu?.bid,
+            type: "option"
+        })
+        setProfileItemDefinations(list)
+        if (!preserveSelection && list.length > 0) {
+            const initialSelected = list.find((item) => item.profile_id === variableBid);
+            if (initialSelected) {
+                setSelectedProfile(initialSelected);
+                await loadProfileItem(initialSelected.profile_id);
+            }
+        }
     }
 
     return (
@@ -154,64 +142,48 @@ export default memo(function Option(props: ButtonProps) {
                 <label htmlFor="" className='whitespace-nowrap w-[70px] shrink-0'>
                     {t('option.variable')}
                 </label>
-                <ProfileFormItem value={[tempValue||'']} onChange={handleProfileChange} />
+                <Select
+                    value={selectedProfile?.profile_key || ""}
+                    onValueChange={handleValueChange}
+                    onOpenChange={(open) => {
+                        if (open) {
+                            loadProfileItemDefinations(true);
+                        }
+                    }}
+                >
+                    <SelectTrigger className="h-8 w-[170px]">
+                        <SelectValue>
+                            {selectedProfile?.profile_key || t('option.select-variable')}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {
+                            profileItemDefinations?.map((item) => {
+                                return <SelectItem key={item.profile_key} value={item.profile_id} >{item.profile_key}</SelectItem>
+                            })
+                        }
+                    </SelectContent>
+                </Select>
             </div>
             <div className='flex flex-col space-y-2'>
                 {
-                    tempButtons.length === 0 ? (
-                        <div className='flex flex-row items-center'>
-                            <span className='flex flex-row items-center whitespace-nowrap  w-[70px] shrink-0'>
-                                {t('option.value')}
-                            </span>
-                            <Input className='w-40' placeholder={t('option.variable-placeholder')} value="全部" onChange={(e) => {
-                                const newButton = {
-                                    "properties": {
-                                        "button_name": "全部",
-                                        "button_key": e.target.value
-                                    },
-                                    "type": "button"
-                                };
-                                setTempButtons([newButton]);
-                            }}></Input>
-                            <label htmlFor="" className='whitespace-nowrap w-[50px] shrink-0 ml-4'>
-                                {t('option.title')}
-                            </label>
-                            <Input className='w-40 ml-4' placeholder={t('option.title-placeholder')} value="全部" onChange={(e) => {
-                                const newButton = {
-                                    "properties": {
-                                        "button_name": e.target.value,
-                                        "button_key": "全部"
-                                    },
-                                    "type": "button"
-                                };
-                                setTempButtons([newButton]);
-                            }}></Input>
-                            <Button className='h-8 w-8' variant="ghost" onClick={() => onAdd(-1)} >
-                                <Plus />
-                            </Button>
-                        </div>
-                    ) : (
-                        tempButtons.map((button: any, index: number) => {
+
+                        tempOptions.map((option: any, index: number) => {
                             return (
                                 <div key={index} className='flex flex-row items-center'>
                                     <label htmlFor="" className='whitespace-nowrap w-[70px] shrink-0'>
                                         {t('option.value')}
                                     </label>
-                                    <Input value={button.properties.button_key} className='w-40' onChange={onButtonValueChange.bind(null, index)}></Input>
+                                    <label  >{option.value}</label>
                                     <label htmlFor="" className='whitespace-nowrap w-[50px] shrink-0 ml-4'>
                                         {t('option.title')}
                                     </label>
-                                    <Input value={button.properties.button_name} className='w-40 ml-4' onChange={onButtonTextChange.bind(null, index)}></Input>
-                                    <Button className='h-8 w-8' variant="ghost" onClick={onAdd.bind(null, index)} >
-                                        <Plus />
-                                    </Button>
-                                    <Button className='h-8 w-8' variant="ghost" onClick={onDelete.bind(null, index)} >
-                                        <Trash />
-                                    </Button>
+                                    <Input value={option.label.lang[i18n.language]} className='w-40 ml-4' onChange={onButtonTextChange.bind(null, index)}></Input>
+
                                 </div>
                             )
                         })
-                    )
+
                 }
             </div>
             <div className='flex flex-row items-center'>
@@ -224,20 +196,6 @@ export default memo(function Option(props: ButtonProps) {
                     {t('option.complete')}
                 </Button>
             </div>
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t('option.confirm-delete')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {t('option.confirm-delete-description')}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>{t('option.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmDelete}>{t('option.confirm')}</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </div>
     )
-},OptionPropsEqual)
+}, OptionPropsEqual)
