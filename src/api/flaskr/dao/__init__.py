@@ -31,6 +31,8 @@ def init_db(app: Flask):
             + str(app.config["MYSQL_PORT"])
             + "/"
             + app.config["MYSQL_DB"]
+            + "?charset="
+            + app.config.get("MYSQL_CHARSET", "utf8mb4")
         )
     else:
         app.logger.info("init dbconfig from config")
@@ -119,7 +121,10 @@ def run_with_redis(app, key, timeout: int, func, args):
             try:
                 return func(*args)
             finally:
-                lock.release()
+                try:
+                    lock.release()
+                except Exception:
+                    pass
         else:
             app.logger.info("run_with_redis get lock failed {}".format(key))
             return None

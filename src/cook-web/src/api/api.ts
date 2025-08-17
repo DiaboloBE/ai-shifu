@@ -13,13 +13,11 @@
 
 const api = {
   // auth
-  login: 'POST /user/login',
   sendSmsCode: 'POST /user/send_sms_code',
   sendMailCode: 'POST /user/send_mail_code',
   requireTmp: 'POST /user/require_tmp',
   verifyMailCode: 'POST /user/verify_mail_code',
   verifySmsCode: 'POST /user/verify_sms_code',
-  setPassword: 'POST /user/set_user_password',
   submitFeedback: 'POST /user/submit-feedback',
 
   // shifu api start
@@ -57,21 +55,20 @@ const api = {
   updateUserInfo: 'POST /user/update_info',
   updateChapterOrder: 'POST /shifu/update-chapter-order',
 
-
   getModelList: 'GET /llm/model-list',
   getSystemPrompt: 'GET /llm/get-system-prompt',
   debugPrompt: 'GET /llm/debug-prompt',
 
   // resource api start
-  getVideoInfo:'POST /shifu/get-video-info',
-  upfileByUrl:'POST /shifu/url-upfile',
+  getVideoInfo: 'POST /shifu/get-video-info',
+  upfileByUrl: 'POST /shifu/url-upfile',
   // resource api end
 
   // profile
 
   saveProfile: 'POST /profiles/save-profile-item',
   deleteProfile: 'POST /profiles/delete-profile-item',
-  getProfileList: 'GET /profiles/get-profile-item-definitions'
-}
+  getProfileList: 'GET /profiles/get-profile-item-definitions',
+};
 
-export default api
+export default api;

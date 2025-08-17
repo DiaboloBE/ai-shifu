@@ -1,8 +1,10 @@
 /**
  * File upload utility functions
  */
-import { getToken } from "@/local/local";
+import { useUserStore } from '@/store';
 import { v4 as uuidv4 } from 'uuid';
+import { getDynamicApiBaseUrl } from '@/config/environment';
+import { getStringEnv } from '@/c-utils/envUtils';
 
 /**
  * Upload a file to the server using FormData and fetch
@@ -18,7 +20,7 @@ export const uploadFile = async (
   url: string,
   params?: Record<string, string>,
   headers?: Record<string, string>,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
 ): Promise<Response> => {
   // Create a new FormData instance
   const formData = new FormData();
@@ -26,6 +28,18 @@ export const uploadFile = async (
   // Append the file to the FormData
   formData.append('file', file);
 
+  // Handle URL
+  let fullUrl = url;
+  if (!fullUrl.startsWith('http')) {
+    if (typeof window !== 'undefined') {
+      // Client: use cached API base URL to avoid repeated requests
+      const siteHost = await getDynamicApiBaseUrl();
+      fullUrl = (siteHost || 'http://localhost:8081') + url;
+    } else {
+      // Fallback for server-side rendering
+      fullUrl = (getStringEnv('baseURL') || 'http://localhost:8081') + url;
+    }
+  }
   // Append any additional parameters
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -38,10 +52,10 @@ export const uploadFile = async (
     return new Promise(async (resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
-      xhr.open('POST', url);
+      xhr.open('POST', fullUrl);
 
       // Get token
-      const token = await getToken();
+      const token = useUserStore.getState().getToken();
 
       // Add headers if provided
       if (headers) {
@@ -52,12 +66,12 @@ export const uploadFile = async (
 
       // Add token headers
       if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.setRequestHeader("Token", token);
-        xhr.setRequestHeader("X-Request-ID", uuidv4().replace(/-/g, ''));
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('Token', token);
+        xhr.setRequestHeader('X-Request-ID', uuidv4().replace(/-/g, ''));
       }
 
-      xhr.upload.addEventListener('progress', (event) => {
+      xhr.upload.addEventListener('progress', event => {
         if (event.lengthComputable) {
           const progress = Math.round((event.loaded / event.total) * 100);
           onProgress(progress);
@@ -70,15 +84,19 @@ export const uploadFile = async (
             status: xhr.status,
             statusText: xhr.statusText,
             headers: new Headers(
-              xhr.getAllResponseHeaders()
+              xhr
+                .getAllResponseHeaders()
                 .split('\r\n')
                 .filter(Boolean)
-                .reduce((acc, header) => {
-                  const [key, value] = header.split(': ');
-                  acc[key.toLowerCase()] = value;
-                  return acc;
-                }, {} as Record<string, string>)
-            )
+                .reduce(
+                  (acc, header) => {
+                    const [key, value] = header.split(': ');
+                    acc[key.toLowerCase()] = value;
+                    return acc;
+                  },
+                  {} as Record<string, string>,
+                ),
+            ),
           });
           resolve(response);
         } else {
@@ -95,7 +113,7 @@ export const uploadFile = async (
   } else {
     // Use standard fetch API if no progress tracking is needed
     // Get token
-    const token = await getToken();
+    const token = useUserStore.getState().getToken();
 
     // Prepare headers
     let mergedHeaders = headers ? { ...headers } : {};
@@ -104,10 +122,9 @@ export const uploadFile = async (
     if (token) {
       mergedHeaders = {
         ...mergedHeaders,
-        "Authorization": `Bearer ${token}`,
-        "Token": token,
-        "X-API-MODE": "admin",
-        "X-Request-ID": uuidv4().replace(/-/g, '')
+        Authorization: `Bearer ${token}`,
+        Token: token,
+        'X-Request-ID': uuidv4().replace(/-/g, ''),
       };
     }
 
@@ -135,7 +152,7 @@ export const uploadMultipleFiles = async (
   url: string,
   fieldName: string = 'files',
   params?: Record<string, string>,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
 ): Promise<Response> => {
   const formData = new FormData();
 
@@ -152,7 +169,7 @@ export const uploadMultipleFiles = async (
   }
 
   // Get token
-  const token = await getToken();
+  const token = useUserStore.getState().getToken();
 
   // Prepare headers
   let mergedHeaders = headers ? { ...headers } : {};
@@ -161,10 +178,9 @@ export const uploadMultipleFiles = async (
   if (token) {
     mergedHeaders = {
       ...mergedHeaders,
-      "Authorization": `Bearer ${token}`,
-      "Token": token,
-      "X-API-MODE": "admin",
-      "X-Request-ID": uuidv4().replace(/-/g, '')
+      Authorization: `Bearer ${token}`,
+      Token: token,
+      'X-Request-ID': uuidv4().replace(/-/g, ''),
     };
   }
 
@@ -191,7 +207,7 @@ export const uploadFileWithCustomName = async (
   customName: string,
   url: string,
   params?: Record<string, string>,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
 ): Promise<Response> => {
   // Create a new File object with the custom name
   const renamedFile = new File([file], customName, { type: file.type });

@@ -2,9 +2,10 @@ const fs = require('fs'); // eslint-disable-line
 const path = require('path'); // eslint-disable-line
 
 function getAllFiles(dir, files = []) {
-  try{
+  try {
     fs.readdirSync(dir).forEach(file => {
       const fullPath = path.join(dir, file);
+
       if (fs.statSync(fullPath).isDirectory()) {
         if (!['local', 'assets'].includes(file)) {
           getAllFiles(fullPath, files);
@@ -13,24 +14,46 @@ function getAllFiles(dir, files = []) {
         files.push(fullPath);
       }
     });
+
     return files;
   } catch (error) {
     console.error(`${dir} read failed. ${error}`);
+
     return [];
   }
 }
 
 function extractKeysFromFile(filePath) {
-  try{
+  try {
     const content = fs.readFileSync(filePath, 'utf8');
-    const regex = /(?:{)?\s*t\s*\(\s*['"]([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+)['"]\s*(?:,\s*\{[^}]*\})?\s*\)(?:})?/g;
-    let match, keys = [];
-    while ((match = regex.exec(content)) !== null) {
+    // First normalize the content to handle multiline t() calls
+    // Replace newlines within t() calls with spaces
+    const normalizedContent = content.replace(/\bt\s*\(\s*\n\s*/g, 't(');
+
+    // Match t() function calls in various contexts including JSX attributes
+    // This regex handles: t('key'), t('key', {...}), {t('key')}, placeholder={t('key')}, etc.
+    const tRegex =
+      /\bt\s*\(\s*['"]([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+)['"](?:\s*,\s*[^)]+)?\s*\)/g;
+    const setErrorRegex =
+      /setError\s*\(\s*['"]([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+)['"]\s*\)/g;
+
+    let match,
+      keys = [];
+
+    // Extract keys from t() calls
+    while ((match = tRegex.exec(normalizedContent)) !== null) {
       keys.push(match[1]);
     }
+
+    // Extract keys from setError() calls that use translation keys
+    while ((match = setErrorRegex.exec(normalizedContent)) !== null) {
+      keys.push(match[1]);
+    }
+
     return keys;
   } catch (error) {
     console.error(`${filePath} read failed. ${error}`);
+
     return [];
   }
 }
@@ -38,6 +61,7 @@ function extractKeysFromFile(filePath) {
 function setNested(obj, key, value) {
   const keys = key.split('.');
   let cur = obj;
+
   keys.forEach((k, idx) => {
     if (idx === keys.length - 1) {
       if (!(k in cur)) cur[k] = value;
@@ -50,19 +74,26 @@ function setNested(obj, key, value) {
 
 function buildNestedJson(keys, langMark) {
   const result = {};
+
   keys.forEach(key => setNested(result, key, langMark));
+
   return result;
 }
 
 function mergeJson(base, patch) {
   for (const k in patch) {
-    if (typeof patch[k] === 'object' && patch[k] !== null && !Array.isArray(patch[k])) {
+    if (
+      typeof patch[k] === 'object' &&
+      patch[k] !== null &&
+      !Array.isArray(patch[k])
+    ) {
       if (!base[k]) base[k] = {};
       mergeJson(base[k], patch[k]);
     } else {
       if (!(k in base)) base[k] = patch[k];
     }
   }
+
   return base;
 }
 
@@ -72,15 +103,18 @@ function sortObjectKeys(obj) {
   }
 
   const sortedObj = {};
+
   Object.keys(obj)
     .sort((a, b) => {
       if (a === 'langName') return -1;
       if (b === 'langName') return 1;
+
       return a.localeCompare(b);
     })
     .forEach(key => {
       sortedObj[key] = sortObjectKeys(obj[key]);
     });
+
   return sortedObj;
 }
 
@@ -92,11 +126,13 @@ function pruneUnusedKeys(obj, validKeys, prefix = '') {
   const hasValidChildren = (obj, currentPrefix) => {
     for (const key in obj) {
       const fullKey = currentPrefix ? `${currentPrefix}.${key}` : key;
+
       if (validKeysSet.has(fullKey)) return true;
       if (typeof obj[key] === 'object' && obj[key] !== null) {
         if (hasValidChildren(obj[key], fullKey)) return true;
       }
     }
+
     return false;
   };
 
@@ -115,6 +151,7 @@ function pruneUnusedKeys(obj, validKeys, prefix = '') {
       }
     }
   }
+
   return result;
 }
 
@@ -125,11 +162,12 @@ const files = getAllFiles(ROOT_DIR);
 const allKeys = Array.from(new Set(files.flatMap(extractKeysFromFile)));
 
 fs.readdirSync(LOCALE_DIR).forEach(file => {
-  if (file.endsWith('.json') &&  file !== 'languages.json') {
+  if (file.endsWith('.json') && file !== 'languages.json') {
     const langFile = path.join(LOCALE_DIR, file);
     const langMark = `@${file}`;
     let baseJson = {};
-    try{
+
+    try {
       if (fs.existsSync(langFile)) {
         baseJson = JSON.parse(fs.readFileSync(langFile, 'utf8'));
       }
@@ -137,6 +175,7 @@ fs.readdirSync(LOCALE_DIR).forEach(file => {
       const prunedBaseJson = pruneUnusedKeys(baseJson, allKeys);
       const merged = mergeJson(prunedBaseJson, patchJson);
       const sorted = sortObjectKeys(merged);
+
       fs.writeFileSync(langFile, JSON.stringify(sorted, null, 2), 'utf8');
     } catch (error) {
       console.error(`${file} update failed. ${error}`);

@@ -1,172 +1,159 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import {
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle
-} from '@/components/ui/card'
-import { PhoneLogin } from '@/components/auth/phone-login'
-import { EmailLogin } from '@/components/auth/email-login'
-import { PhoneRegister } from '@/components/auth/phone-register'
-import { EmailRegister } from '@/components/auth/email-register'
-import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
-import { FeedbackForm } from '@/components/auth//feedback-form'
-import Image from 'next/image'
-import { setToken } from '@/local/local'
-import LanguageSelect from '@/components/language-select'
+  CardTitle,
+} from '@/components/ui/Card';
+import { PhoneLogin } from '@/components/auth/PhoneLogin';
+import { EmailLogin } from '@/components/auth/EmailLogin';
+import { FeedbackForm } from '@/components/auth/FeedbackForm';
+import Image from 'next/image';
+import logoHorizontal from '@/c-assets/logos/ai-shifu-logo-horizontal.png';
+import LanguageSelect from '@/components/language-select';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { browserLanguage } from '@/i18n';
-export default function AuthPage () {
-  const router = useRouter()
-  const [authMode, setAuthMode] = useState<
-    'login' | 'register' | 'forgot-password' | 'feedback'
-  >('login')
-  const [loginMethod, setLoginMethod] = useState<'phone' | 'password'>('phone')
-  const [registerMethod, setRegisterMethod] = useState<'phone' | 'email'>(
-    'phone'
-  )
-  const [language, setLanguage] = useState(browserLanguage)
-  const handleAuthSuccess = () => {
-    router.push('/main')
-  }
+import { environment } from '@/config/environment';
 
-  const handleForgotPassword = () => {
-    setAuthMode('forgot-password')
-  }
+export default function AuthPage() {
+  const router = useRouter();
+  const [authMode, setAuthMode] = useState<'login' | 'feedback'>('login');
+
+  // Get login methods from environment configuration
+  const enabledMethods = environment.loginMethodsEnabled;
+  const defaultMethod = environment.defaultLoginMethod;
+
+  const isPhoneEnabled = enabledMethods.includes('phone');
+  const isEmailEnabled = enabledMethods.includes('email');
+
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>(
+    defaultMethod as 'phone' | 'email',
+  );
+  const [language, setLanguage] = useState(browserLanguage);
+
+  const searchParams = useSearchParams();
+  const handleAuthSuccess = () => {
+    let redirect = searchParams.get('redirect');
+    if (!redirect || redirect.charAt(0) !== '/') {
+      redirect = '/main';
+    }
+    // Using push for navigation keeps a history, so when users click the back button, they'll return to the login page.
+    // router.push('/main')
+    router.replace(redirect);
+  };
 
   const handleFeedback = () => {
-    setAuthMode('feedback')
-  }
+    setAuthMode('feedback');
+  };
 
   const handleBackToLogin = () => {
-    setAuthMode('login')
-  }
+    setAuthMode('login');
+  };
 
   const { t } = useTranslation();
-  useEffect(() => {
-    setToken('')
-  }, [])
 
   useEffect(() => {
-    i18n.changeLanguage(language)
-
-  }, [language])
+    i18n.changeLanguage(language);
+  }, [language]);
   return (
     <div className='min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4'>
-
       <div className='w-full max-w-md space-y-2'>
         <div className='flex flex-col items-center relative'>
           <h2 className='text-primary flex items-center font-semibold pb-2  w-full justify-center'>
             <Image
               className='dark:invert'
-              src='/logo.svg'
+              src={logoHorizontal}
               alt='AI-Shifu'
-              width={140}
-              height={30}
+              width={180}
+              height={40}
               priority
             />
 
-          <div className='absolute top-0 right-0'>
-          <LanguageSelect language={language} onSetLanguage={setLanguage} variant='login' />
-        </div>
-        </h2>
+            <div className='absolute top-0 right-0'>
+              <LanguageSelect
+                language={language}
+                onSetLanguage={setLanguage}
+                variant='login'
+              />
+            </div>
+          </h2>
         </div>
         <Card>
           <CardHeader>
             {authMode === 'login' && (
               <>
-                <CardTitle className='text-xl text-center'>{t('login.title')}</CardTitle>
-                <CardDescription className='text-sm text-center'>
-                  {t('login.description')}
-                </CardDescription>
-              </>
-            )}
-            {authMode === 'register' && (
-              <>
-                <CardTitle className='text-xl text-center'>{t('login.register')}</CardTitle>
-                <CardDescription className='text-sm text-center'>
-                  {t('login.register-description')}
-                </CardDescription>
-              </>
-            )}
-            {authMode === 'forgot-password' && (
-              <>
-                <CardTitle className='text-xl text-center'>{t('login.forgot-password')}</CardTitle>
-                <CardDescription className='text-sm text-center'>
-                  {t('login.forgot-password')}
-                </CardDescription>
+                <CardTitle className='text-xl text-center'>
+                  {t('auth.title')}
+                </CardTitle>
               </>
             )}
             {authMode === 'feedback' && (
               <>
-                <CardTitle className='text-xl text-center'>{t('login.feedback')}</CardTitle>
+                <CardTitle className='text-xl text-center'>
+                  {t('auth.feedback')}
+                </CardTitle>
                 <CardDescription className='text-sm text-center'>
-                  {t('login.feedback')}
+                  {t('auth.feedback')}
                 </CardDescription>
               </>
             )}
-
           </CardHeader>
 
           <CardContent>
             {authMode === 'login' && (
-              <Tabs
-                value={loginMethod}
-                onValueChange={value =>
-                  setLoginMethod(value as 'phone' | 'password')
-                }
-                className='w-full'
-              >
-                <TabsList className='grid w-full grid-cols-2'>
-                  <TabsTrigger value='phone'>{t('login.phone')}</TabsTrigger>
-                  <TabsTrigger value='password'>{t('login.email')}</TabsTrigger>
-                </TabsList>
+              <>
+                {enabledMethods.length > 1 ? (
+                  <Tabs
+                    value={loginMethod}
+                    onValueChange={value =>
+                      setLoginMethod(value as 'phone' | 'email')
+                    }
+                    className='w-full'
+                  >
+                    <TabsList className={'grid w-full grid-cols-2'}>
+                      {isPhoneEnabled && (
+                        <TabsTrigger value='phone'>
+                          {t('auth.phone')}
+                        </TabsTrigger>
+                      )}
+                      {isEmailEnabled && (
+                        <TabsTrigger value='email'>
+                          {t('auth.email')}
+                        </TabsTrigger>
+                      )}
+                    </TabsList>
 
-                <TabsContent value='phone'>
-                  <PhoneLogin onLoginSuccess={handleAuthSuccess} />
-                </TabsContent>
+                    {isPhoneEnabled && (
+                      <TabsContent value='phone'>
+                        <PhoneLogin onLoginSuccess={handleAuthSuccess} />
+                      </TabsContent>
+                    )}
 
-                <TabsContent value='password'>
-                  <EmailLogin
-                    onLoginSuccess={handleAuthSuccess}
-                    onForgotPassword={handleForgotPassword}
-                  />
-                </TabsContent>
-              </Tabs>
-            )}
-
-            {authMode === 'register' && (
-              <Tabs
-                value={registerMethod}
-                onValueChange={value =>
-                  setRegisterMethod(value as 'phone' | 'email')
-                }
-                className='w-full'
-              >
-                <TabsList className='grid w-full grid-cols-2'>
-                  <TabsTrigger value='phone'>{t('login.phone-register')}</TabsTrigger>
-                  <TabsTrigger value='email'>{t('login.email-register')}</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value='phone'>
-                  <PhoneRegister onRegisterSuccess={handleAuthSuccess} />
-                </TabsContent>
-
-                <TabsContent value='email'>
-                  <EmailRegister onRegisterSuccess={handleAuthSuccess} />
-                </TabsContent>
-              </Tabs>
-            )}
-
-            {authMode === 'forgot-password' && (
-              <ForgotPasswordForm onComplete={handleBackToLogin} />
+                    {isEmailEnabled && (
+                      <TabsContent value='email'>
+                        <EmailLogin onLoginSuccess={handleAuthSuccess} />
+                      </TabsContent>
+                    )}
+                  </Tabs>
+                ) : (
+                  // Single method, no tabs needed
+                  <div className='w-full'>
+                    {isPhoneEnabled && (
+                      <PhoneLogin onLoginSuccess={handleAuthSuccess} />
+                    )}
+                    {isEmailEnabled && (
+                      <EmailLogin onLoginSuccess={handleAuthSuccess} />
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {authMode === 'feedback' && (
@@ -174,57 +161,28 @@ export default function AuthPage () {
             )}
           </CardContent>
           <CardFooter className='flex flex-col items-center space-y-2'>
-            {authMode === 'login' && (
-              <>
-                <p className='text-sm text-muted-foreground'>
-                  {t('login.no-account')}
-                  <button
-                    onClick={() => setAuthMode('register')}
-                    className='text-primary hover:underline'
-                  >
-                    {t('login.register')}
-                  </button>
-                </p>
-              </>
-            )}
-            {authMode === 'register' && (
-              <>
-                <p className='text-sm text-muted-foreground'>
-                  {t('login.has-account')}
-                  <button
-                    onClick={() => setAuthMode('login')}
-                    className='text-primary hover:underline'
-                  >
-                    {t('login.login-now')}
-                  </button>
-                </p>
-              </>
-            )}
-            {(authMode === 'forgot-password' || authMode === 'feedback') && (
+            {authMode === 'feedback' && (
               <button
                 onClick={handleBackToLogin}
                 className='text-primary hover:underline'
               >
-                {t('login.back-to-login')}
+                {t('auth.backToLogin')}
               </button>
             )}
             {authMode !== 'feedback' && (
               <p className='text-sm text-muted-foreground'>
-                {t('login.problem')}
+                {t('auth.problem')}
                 <button
                   onClick={handleFeedback}
                   className='text-primary hover:underline'
                 >
-                  {t('login.submit-feedback')}
+                  {t('auth.submitFeedback')}
                 </button>
               </p>
             )}
           </CardFooter>
         </Card>
-
-
-
       </div>
     </div>
-  )
+  );
 }

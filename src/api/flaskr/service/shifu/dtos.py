@@ -1,5 +1,16 @@
+"""
+Shifu dtos
+
+This module contains dtos for shifu.
+
+Author: yfge
+Date: 2025-08-07
+"""
+
 from flaskr.common.swagger import register_schema_to_swagger
-from flaskr.service.shifu.utils import OutlineTreeNode
+from flaskr.service.shifu.models import (
+    DraftOutlineItem,
+)
 from flaskr.service.profile.dtos import (
     TextProfileDto,
     SelectProfileDto,
@@ -9,6 +20,10 @@ from pydantic import BaseModel, Field
 
 @register_schema_to_swagger
 class ShifuDto(BaseModel):
+    """
+    Shifu dto
+    """
+
     bid: str = Field(..., description="shifu id", required=False)
     name: str = Field(..., description="shifu name", required=False)
     description: str = Field(..., description="shifu description", required=False)
@@ -47,6 +62,10 @@ class ShifuDto(BaseModel):
 
 @register_schema_to_swagger
 class ShifuDetailDto(BaseModel):
+    """
+    Shifu detail dto
+    """
+
     bid: str = Field(..., description="shifu id", required=False)
     name: str = Field(..., description="shifu name", required=False)
     description: str = Field(..., description="shifu description", required=False)
@@ -100,39 +119,11 @@ class ShifuDetailDto(BaseModel):
 
 
 @register_schema_to_swagger
-class ChapterDto(BaseModel):
-    chapter_id: str = Field(..., description="chapter id", required=False)
-    chapter_name: str = Field(..., description="chapter name", required=False)
-    chapter_description: str = Field(
-        ..., description="chapter description", required=False
-    )
-    chapter_type: int = Field(..., description="chapter type", required=False)
-
-    def __init__(
-        self,
-        chapter_id: str,
-        chapter_name: str,
-        chapter_description: str,
-        chapter_type: int,
-    ):
-        super().__init__(
-            chapter_id=chapter_id,
-            chapter_name=chapter_name,
-            chapter_description=chapter_description,
-            chapter_type=chapter_type,
-        )
-
-    def __json__(self):
-        return {
-            "chapter_id": self.chapter_id,
-            "chapter_name": self.chapter_name,
-            "chapter_description": self.chapter_description,
-            "chapter_type": self.chapter_type,
-        }
-
-
-@register_schema_to_swagger
 class SimpleOutlineDto(BaseModel):
+    """
+    Simple outline dto
+    """
+
     bid: str = Field(..., description="outline id", required=False)
     position: str = Field(..., description="outline position", required=False)
     name: str = Field(..., description="outline name", required=False)
@@ -142,15 +133,23 @@ class SimpleOutlineDto(BaseModel):
 
     def __init__(
         self,
-        node: OutlineTreeNode,
+        bid: str,
+        position: str,
+        name: str,
+        children: list,
     ):
         super().__init__(
-            bid=node.outline_id,
-            position=node.lesson_no,
-            name=node.outline.lesson_name,
+            bid=bid,
+            position=position,
+            name=name,
             children=(
-                [SimpleOutlineDto(child) for child in node.children]
-                if node.children
+                [
+                    SimpleOutlineDto(
+                        child.bid, child.position, child.name, child.children
+                    )
+                    for child in children
+                ]
+                if children
                 else []
             ),
         )
@@ -164,8 +163,64 @@ class SimpleOutlineDto(BaseModel):
         }
 
 
+# new outline tree node class, for handling DraftOutlineItem
+# author: yfge
+# date: 2025-07-13
+# version: 1.0.0
+# description: this class is used to handle DraftOutlineItem
+# usage:
+# 1. create a new ShifuOutlineTreeNode
+# 2. add a child to the node
+# 3. remove a child from the node
+class ShifuOutlineTreeNode:
+    """
+    Shifu outline tree node
+    """
+
+    def __init__(self, outline_item: DraftOutlineItem):
+        self.outline = outline_item
+        self.children = []
+        if outline_item:
+            self.outline_id = outline_item.outline_item_bid
+            self.position = outline_item.position
+        else:
+            self.outline_id = ""
+            self.position = ""
+        self.parent_node = None
+
+    def add_child(self, child: "ShifuOutlineTreeNode"):
+        """
+        add a child to the node
+        """
+        self.children.append(child)
+        child.parent_node = self
+
+    def remove_child(self, child: "ShifuOutlineTreeNode"):
+        """
+        remove a child from the node
+        """
+        child.parent_node = None
+        self.children.remove(child)
+
+    def get_new_position(self):
+        """
+        get the new position of the node
+        """
+        if not self.parent_node:
+            return self.position
+        else:
+            return (
+                self.parent_node.get_new_position()
+                + f"{self.parent_node.children.index(self) + 1:02d}"
+            )
+
+
 @register_schema_to_swagger
 class OutlineDto(BaseModel):
+    """
+    Outline dto
+    """
+
     bid: str = Field(..., description="outline id", required=False)
     position: str = Field(..., description="outline no", required=False)
     name: str = Field(..., description="outline name", required=False)
@@ -212,6 +267,10 @@ class OutlineDto(BaseModel):
 
 @register_schema_to_swagger
 class OutlineEditDto:
+    """
+    Outline edit dto
+    """
+
     outline_id: str
     outline_no: str
     outline_name: str
@@ -227,6 +286,9 @@ class OutlineEditDto:
         outline_desc: str = None,
         outline_type: int = None,
     ):
+        """
+        init outline edit dto
+        """
         self.outline_id = outline_id
         self.outline_no = outline_no
         self.outline_name = outline_name
@@ -250,6 +312,10 @@ class OutlineEditDto:
 
 @register_schema_to_swagger
 class BlockUpdateResultDto:
+    """
+    Block update result dto
+    """
+
     data: TextProfileDto | SelectProfileDto | None
     error_message: str | None
 
@@ -258,6 +324,9 @@ class BlockUpdateResultDto:
         data: TextProfileDto | SelectProfileDto | None,
         error_message: str | None = None,
     ):
+        """
+        init block update result dto
+        """
         self.data = data
         self.error_message = error_message
 
@@ -273,6 +342,10 @@ class BlockUpdateResultDto:
 
 @register_schema_to_swagger
 class SaveBlockListResultDto:
+    """
+    Save block list result dto
+    """
+
     blocks: list["BlockDTO"]
     error_messages: dict[str, str]
 
@@ -281,6 +354,9 @@ class SaveBlockListResultDto:
         blocks: list["BlockDTO"],
         error_messages: dict[str, str],
     ):
+        """
+        init save block list result dto
+        """
         self.blocks = blocks
         self.error_messages = error_messages
 
@@ -296,10 +372,17 @@ class SaveBlockListResultDto:
 
 @register_schema_to_swagger
 class ReorderOutlineItemDto:
+    """
+    Reorder outline item dto
+    """
+
     bid: str
     children: list["ReorderOutlineItemDto"]
 
     def __init__(self, bid: str, children: list["ReorderOutlineItemDto"]):
+        """
+        init reorder outline item dto
+        """
         self.bid = bid
         self.children = children
 
@@ -312,6 +395,10 @@ class ReorderOutlineItemDto:
 
 @register_schema_to_swagger
 class ReorderOutlineDto:
+    """
+    Reorder outline dto
+    """
+
     outlines: list[ReorderOutlineItemDto]
 
 
@@ -321,17 +408,24 @@ class ReorderOutlineDto:
 # i18n label dto
 @register_schema_to_swagger
 class LabelDTO(BaseModel):
+    """
+    Label dto
+    """
+
     lang: dict[str, str] = Field(
         default_factory=dict, description="label lang", required=True
     )
 
     def __init__(self, lang: dict[str, str], **kwargs):
-        from flask import current_app
-
-        current_app.logger.info(f"lang: {lang}")
+        """
+        init label dto
+        """
         super().__init__(lang=lang)
 
     def __json__(self):
+        """
+        json label dto
+        """
         return {
             "lang": self.lang,
         }
@@ -339,6 +433,10 @@ class LabelDTO(BaseModel):
 
 @register_schema_to_swagger
 class ContentDTO(BaseModel):
+    """
+    Content dto
+    """
+
     content: str = Field(..., description="content", required=True, allow_none=True)
     llm_enabled: bool = Field(..., description="llm enabled", required=True)
     llm: str = Field(..., description="llm", required=False)
@@ -352,12 +450,9 @@ class ContentDTO(BaseModel):
         llm_temperature: float = None,
         **kwargs,
     ):
-        from flask import current_app
-
-        current_app.logger.info(f"content: {content}")
-        current_app.logger.info(f"llm_enabled: {llm_enabled}")
-        current_app.logger.info(f"llm: {llm}")
-        current_app.logger.info(f"llm_temperature: {llm_temperature}")
+        """
+        init content dto
+        """
         super().__init__(
             content=content if content is not None else "",
             llm_enabled=llm_enabled,
@@ -376,8 +471,14 @@ class ContentDTO(BaseModel):
 
 @register_schema_to_swagger
 class BreakDTO(BaseModel):
+    """
+    Break dto
+    """
 
     def __init__(self, **kwargs):
+        """
+        init break dto
+        """
         super().__init__()
 
     def __json__(self):
@@ -386,23 +487,30 @@ class BreakDTO(BaseModel):
 
 @register_schema_to_swagger
 class ButtonDTO(BaseModel):
+    """
+    Button dto
+    """
+
     label: LabelDTO = Field(..., description="label", required=True)
 
     def __init__(self, label: dict[str, str], **kwargs):
-        from flask import current_app
-
-        current_app.logger.info(f"label: {label} type: {type(label)}")
-
+        """
+        init button dto
+        """
         super().__init__(label=LabelDTO(lang=label.get("lang", label)))
 
     def __json__(self):
         return {
-            "label": self.label,
+            "label": self.label.__json__(),
         }
 
 
 @register_schema_to_swagger
 class InputDTO(BaseModel):
+    """
+    Input dto
+    """
+
     placeholder: LabelDTO = Field(..., description="placeholder", required=True)
     prompt: str = Field(..., description="prompt", required=True)
     result_variable_bids: list[str] = Field(
@@ -420,6 +528,9 @@ class InputDTO(BaseModel):
         llm_temperature: float = None,
         **kwargs,
     ):
+        """
+        init input dto
+        """
         super().__init__(
             placeholder=LabelDTO(lang=placeholder.get("lang", placeholder)),
             prompt=prompt,
@@ -430,7 +541,7 @@ class InputDTO(BaseModel):
 
     def __json__(self):
         return {
-            "placeholder": self.placeholder,
+            "placeholder": self.placeholder.__json__(),
             "prompt": self.prompt,
             "result_variable_bids": self.result_variable_bids,
             "llm": self.llm,
@@ -440,28 +551,41 @@ class InputDTO(BaseModel):
 
 @register_schema_to_swagger
 class OptionItemDTO(BaseModel):
+    """
+    Option item dto
+    """
 
     label: LabelDTO = Field(..., description="label", type=LabelDTO, required=True)
     value: str = Field(..., description="value", required=True)
 
     def __init__(self, label: dict[str, str], value: str, **kwargs):
+        """
+        init option item dto
+        """
         super().__init__(label=LabelDTO(lang=label.get("lang", label)), value=value)
 
     def __json__(self):
         return {
-            "label": self.label,
+            "label": self.label.__json__(),
             "value": self.value,
         }
 
 
 @register_schema_to_swagger
 class OptionsDTO(BaseModel):
+    """
+    Options dto
+    """
+
     result_variable_bid: str = Field(
         ..., description="result variable bid", required=True
     )
     options: list[OptionItemDTO] = Field(..., description="options", required=True)
 
     def __init__(self, result_variable_bid: str, options: list[dict], **kwargs):
+        """
+        init options dto
+        """
         super().__init__(
             result_variable_bid=result_variable_bid,
             options=[OptionItemDTO(**option) for option in options],
@@ -470,17 +594,24 @@ class OptionsDTO(BaseModel):
     def __json__(self):
         return {
             "result_variable_bid": self.result_variable_bid,
-            "options": self.options,
+            "options": [option.__json__() for option in self.options],
         }
 
 
 @register_schema_to_swagger
 class GotoConditionDTO(BaseModel):
+    """
+    Goto condition dto
+    """
+
     value: str = Field(..., description="value", required=True)
     destination_type: str = Field(..., description="destination type", required=True)
     destination_bid: str = Field(..., description="destination bid", required=True)
 
     def __init__(self, value: str, destination_type: str, destination_bid: str):
+        """
+        init goto condition dto
+        """
         super().__init__(
             value=value,
             destination_type=destination_type,
@@ -497,23 +628,34 @@ class GotoConditionDTO(BaseModel):
 
 @register_schema_to_swagger
 class GotoDTO(BaseModel):
+    """
+    Goto dto
+    """
+
     conditions: list[GotoConditionDTO] = Field(
         ..., description="conditions", required=True
     )
 
     def __init__(self, conditions: list[dict], **kwargs):
+        """
+        init goto dto
+        """
         super().__init__(
             conditions=[GotoConditionDTO(**condition) for condition in conditions]
         )
 
     def __json__(self):
         return {
-            "conditions": self.conditions,
+            "conditions": [condition.__json__() for condition in self.conditions],
         }
 
 
 @register_schema_to_swagger
 class PaymentDTO(BaseModel):
+    """
+    Payment dto
+    """
+
     label: LabelDTO = Field(..., description="label", type=LabelDTO, required=True)
 
     def __init__(self, label: dict[str, str], **kwargs):
@@ -521,59 +663,84 @@ class PaymentDTO(BaseModel):
 
     def __json__(self):
         return {
-            "label": self.label,
+            "label": self.label.__json__(),
         }
 
 
 @register_schema_to_swagger
 class LoginDTO(BaseModel):
+    """
+    Login dto
+    """
+
     label: LabelDTO = Field(..., description="label", type=LabelDTO, required=True)
 
     def __init__(self, label: dict[str, str], **kwargs):
+        """
+        init login dto
+        """
         super().__init__(label=LabelDTO(lang=label.get("lang", label)))
 
     def __json__(self):
         return {
-            "label": self.label,
+            "label": self.label.__json__(),
         }
 
 
 @register_schema_to_swagger
 class CheckCodeDTO(BaseModel):
+    """
+    Check code dto
+    """
+
     placeholder: LabelDTO = Field(
         ..., description="placeholder", type=LabelDTO, required=True
     )
 
     def __init__(self, placeholder: dict[str, str], **kwargs):
+        """
+        init check code dto
+        """
         super().__init__(
             placeholder=LabelDTO(lang=placeholder.get("lang", placeholder))
         )
 
     def __json__(self):
         return {
-            "placeholder": self.placeholder,
+            "placeholder": self.placeholder.__json__(),
         }
 
 
 @register_schema_to_swagger
 class PhoneDTO(BaseModel):
+    """
+    Phone dto
+    """
+
     placeholder: LabelDTO = Field(
         ..., description="placeholder", type=LabelDTO, required=True
     )
 
     def __init__(self, placeholder: dict[str, str], **kwargs):
+        """
+        init phone dto
+        """
         super().__init__(
             placeholder=LabelDTO(lang=placeholder.get("lang", placeholder))
         )
 
     def __json__(self):
         return {
-            "placeholder": self.placeholder,
+            "placeholder": self.placeholder.__json__(),
         }
 
 
 @register_schema_to_swagger
 class BlockDTO(BaseModel):
+    """
+    Block dto
+    """
+
     bid: str = Field(..., description="bid", required=True)
     type: str = Field(..., description="type", required=True)
     block_content: (
@@ -585,6 +752,8 @@ class BlockDTO(BaseModel):
         | GotoDTO
         | PaymentDTO
         | LoginDTO
+        | CheckCodeDTO
+        | PhoneDTO
     ) = Field(..., description="block content", required=True)
     variable_bids: list[str] = Field(..., description="variable bids", required=False)
     resource_bids: list[str] = Field(..., description="resource bids", required=False)
@@ -601,10 +770,15 @@ class BlockDTO(BaseModel):
             | GotoDTO
             | PaymentDTO
             | LoginDTO
+            | CheckCodeDTO
+            | PhoneDTO
         ),
         variable_bids: list[str],
         resource_bids: list[str],
     ):
+        """
+        init block dto
+        """
         super().__init__(
             bid=bid,
             type=block_content.__class__.__name__.replace("DTO", "").lower(),
@@ -617,7 +791,7 @@ class BlockDTO(BaseModel):
         return {
             "bid": self.bid,
             "type": self.type,
-            "properties": self.block_content,
+            "properties": self.block_content.__json__(),
             "variable_bids": self.variable_bids,
             "resource_bids": self.resource_bids,
         }

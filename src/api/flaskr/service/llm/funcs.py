@@ -2,15 +2,13 @@ from flaskr.api.llm import invoke_llm
 from flaskr.api.langfuse import langfuse_client
 from flaskr.service.study.utils import get_model_setting
 from flaskr.service.study.utils import extract_variables
-from flaskr.service.shifu.block_funcs import (
-    get_block_by_id,
-    get_system_block_by_outline_id,
-)
 from langchain.prompts import PromptTemplate
 from flaskr.service.common import raise_error
 from flaskr.service.study.dtos import ScriptDTO
 from flaskr.service.study.utils import make_script_dto_to_stream
 from flaskr.service.lesson.const import STATUS_PUBLISH, STATUS_DRAFT
+
+from flaskr.service.shifu.models import DraftBlock
 
 
 def format_script_prompt(script_prompt: str, script_variables: dict) -> str:
@@ -27,13 +25,7 @@ def format_script_prompt(script_prompt: str, script_variables: dict) -> str:
 
 def get_system_prompt(app, block_id):
     with app.app_context():
-        block_info = get_block_by_id(app, block_id)
-        if not block_info:
-            raise_error("SCENARIO.BLOCK_NOT_FOUND")
-        block_info = get_system_block_by_outline_id(app, block_info.lesson_id)
-        if not block_info:
-            return ""
-    return block_info.script_prompt
+        return ""
 
 
 def debug_script(
@@ -51,7 +43,14 @@ def debug_script(
     with app.app_context():
 
         try:
-            block_info = get_block_by_id(app, block_id)
+            block_info = (
+                DraftBlock.query.filter(
+                    DraftBlock.block_bid == block_id,
+                    DraftBlock.deleted == 0,
+                )
+                .order_by(DraftBlock.id.desc())
+                .first()
+            )
             if not block_info:
                 raise_error("SCENARIO.BLOCK_NOT_FOUND")
             trace_args = {}

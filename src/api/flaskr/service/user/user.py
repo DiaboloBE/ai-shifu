@@ -10,7 +10,7 @@ from ...common.config import get_config
 from ..common.models import raise_error, raise_error_with_args
 
 from .utils import generate_token
-from ...service.common.dtos import USER_STATE_UNTEGISTERED, UserInfo, UserToken
+from ...service.common.dtos import USER_STATE_UNREGISTERED, UserInfo, UserToken
 from ...service.user.models import User, UserConversion
 from ...dao import db
 from ...api.wechat import get_wechat_access_token
@@ -67,7 +67,6 @@ def generate_temp_user(
                             user_state=user_info.user_state,
                             wx_openid=user_info.user_open_id,
                             language=user_info.user_language,
-                            has_password=bool(user_info.password_hash),
                         ),
                         token=generate_token(app, user_id=user_info.user_id),
                     )
@@ -79,7 +78,7 @@ def generate_temp_user(
                 conversion_source=user_source,
                 conversion_status=0,
             )
-            new_user = User(user_id=user_id, user_state=USER_STATE_UNTEGISTERED)
+            new_user = User(user_id=user_id, user_state=USER_STATE_UNREGISTERED)
             new_user.user_language = language
             new_user.user_open_id = wx_openid
             db.session.add(new_convert_user)
@@ -96,7 +95,6 @@ def generate_temp_user(
                     user_state=new_user.user_state,
                     wx_openid=new_user.user_open_id,
                     language=new_user.user_language,
-                    has_password=bool(new_user.password_hash),
                 ),
                 token=token,
             )
@@ -118,7 +116,6 @@ def generate_temp_user(
                             user_state=user.user_state,
                             wx_openid=user.user_open_id,
                             language=user.user_language,
-                            has_password=bool(user.password_hash),
                         ),
                         token=generate_token(app, user_id=user.user_id),
                     )
@@ -136,7 +133,6 @@ def generate_temp_user(
                     user_state=user.user_state,
                     wx_openid=user.user_open_id,
                     language=user.user_language,
-                    has_password=bool(user.password_hash),
                 ),
                 token=token,
             )

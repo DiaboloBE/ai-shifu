@@ -1,7 +1,6 @@
 # common user
 
 
-import hashlib
 import random
 import string
 import uuid
@@ -17,66 +16,20 @@ from flaskr.api.sms.aliyun import send_sms_code_ali
 from flaskr.service.order.models import AICourseLessonAttend
 from ..common.dtos import (
     USER_STATE_REGISTERED,
-    USER_STATE_UNTEGISTERED,
+    USER_STATE_UNREGISTERED,
     UserInfo,
     UserToken,
 )
 from ..common.models import raise_error
 from .utils import generate_token, get_user_language, get_user_openid
 from ...dao import redis_client as redis, db
-from .models import User as CommonUser, AdminUser as AdminUser
-from flaskr.common.log import get_mode
 from flaskr.service.lesson.models import AICourse
 from flaskr.i18n import get_i18n_list
 
 FIX_CHECK_CODE = get_config("UNIVERSAL_VERIFICATION_CODE")
 
 
-def get_model(app: Flask):
-    mode = get_mode()
-    if mode is None:
-        mode = get_config("MODE", "api")
-    if mode == "admin":
-        return AdminUser
-    else:
-        return CommonUser
-
-
-def verify_user(app: Flask, login: str, raw_password: str) -> UserToken:
-    User = get_model(app)
-    with app.app_context():
-        user = User.query.filter(
-            (User.username == login) | (User.email == login) | (User.mobile == login)
-        ).first()
-        if user:
-            password_hash = hashlib.md5(
-                (user.user_id + raw_password).encode()
-            ).hexdigest()
-            if password_hash == user.password_hash:
-                token = generate_token(app, user_id=user.user_id)
-                return UserToken(
-                    UserInfo(
-                        user_id=user.user_id,
-                        username=user.username,
-                        name=user.name,
-                        email=user.email,
-                        mobile=user.mobile,
-                        user_state=user.user_state,
-                        wx_openid=get_user_openid(user),
-                        language=get_user_language(user),
-                        user_avatar=user.user_avatar,
-                        has_password=user.password_hash != "",
-                    ),
-                    token=token,
-                )
-            else:
-                raise_error("USER.USER_PASSWORD_ERROR")
-        else:
-            raise_error("USER.USER_NOT_FOUND")
-
-
 def validate_user(app: Flask, token: str) -> UserInfo:
-    User = get_model(app)
     with app.app_context():
         if not token:
             raise_error("USER.USER_NOT_LOGIN")
@@ -96,7 +49,6 @@ def validate_user(app: Flask, token: str) -> UserInfo:
                         wx_openid=get_user_openid(user),
                         language=get_user_language(user),
                         user_avatar=user.user_avatar,
-                        has_password=user.password_hash != "",
                         is_admin=user.is_admin,
                         is_creator=user.is_creator,
                     )
@@ -127,7 +79,6 @@ def validate_user(app: Flask, token: str) -> UserInfo:
                         wx_openid=get_user_openid(user),
                         language=get_user_language(user),
                         user_avatar=user.user_avatar,
-                        has_password=user.password_hash != "",
                         is_admin=user.is_admin,
                         is_creator=user.is_creator,
                     )
@@ -144,7 +95,6 @@ def validate_user(app: Flask, token: str) -> UserInfo:
 def update_user_info(
     app: Flask, user: UserInfo, name, email=None, mobile=None, language=None
 ) -> UserInfo:
-    User = get_model(app)
     with app.app_context():
         if user:
             app.logger.info(
@@ -172,7 +122,6 @@ def update_user_info(
                 wx_openid=get_user_openid(user),
                 language=dbuser.user_language,
                 user_avatar=dbuser.user_avatar,
-                has_password=dbuser.password_hash != "",
                 is_admin=dbuser.is_admin,
                 is_creator=dbuser.is_creator,
             )
@@ -180,39 +129,7 @@ def update_user_info(
             raise_error("USER.USER_NOT_FOUND")
 
 
-def change_user_passwd(app: Flask, user: UserInfo, oldpwd, newpwd) -> UserInfo:
-    User = get_model(app)
-    with app.app_context():
-        if user:
-            user = User.query.filter_by(user_id=user.user_id).first()
-            password_hash = hashlib.md5((user.user_id + oldpwd).encode()).hexdigest()
-            if password_hash == user.password_hash:
-                user.password_hash = hashlib.md5(
-                    (user.user_id + newpwd).encode()
-                ).hexdigest()
-                db.session.commit()
-                return UserInfo(
-                    user_id=user.user_id,
-                    username=user.username,
-                    name=user.name,
-                    email=user.email,
-                    mobile=user.mobile,
-                    user_state=user.user_state,
-                    wx_openid=get_user_openid(user),
-                    language=get_user_language(user),
-                    user_avatar=user.user_avatar,
-                    has_password=user.password_hash != "",
-                    is_admin=user.is_admin,
-                    is_creator=user.is_creator,
-                )
-            else:
-                raise_error("USER.OLD_PASSWORD_ERROR")
-        else:
-            raise_error("USER.USER_NOT_FOUND")
-
-
 def get_user_info(app: Flask, user_id: str) -> UserInfo:
-    User = get_model(app)
     with app.app_context():
         user = User.query.filter_by(user_id=user_id).first()
         if user:
@@ -226,7 +143,6 @@ def get_user_info(app: Flask, user_id: str) -> UserInfo:
                 wx_openid=get_user_openid(user),
                 language=get_user_language(user),
                 user_avatar=user.user_avatar,
-                has_password=user.password_hash != "",
                 is_admin=user.is_admin,
                 is_creator=user.is_creator,
             )
@@ -234,54 +150,7 @@ def get_user_info(app: Flask, user_id: str) -> UserInfo:
             raise_error("USER.USER_NOT_FOUND")
 
 
-def require_reset_pwd_code(app: Flask, login: str):
-    User = get_model(app)
-    with app.app_context():
-        user = User.query.filter(
-            (User.username == login) | (User.email == login) | (User.mobile == login)
-        ).first()
-        if user:
-            code = random.randint(0, 9999)
-            redis.set(
-                app.config["REDIS_KEY_PREFIX_RESET_PWD"] + user.user_id,
-                code,
-                ex=app.config["RESET_PWD_CODE_EXPIRE_TIME"],
-            )
-            return True
-        else:
-            raise_error("USER.USER_NOT_FOUND")
-
-
-def reset_pwd(app: Flask, login: str, code: int, newpwd: str):
-    User = get_model(app)
-    with app.app_context():
-        user = User.query.filter(
-            (User.username == login) | (User.email == login) | (User.mobile == login)
-        ).first()
-        if user:
-            redis_code = redis.get(
-                app.config["REDIS_KEY_PREFIX_RESET_PWD"] + user.user_id
-            )
-            if redis_code is None:
-                raise_error("USER.RESET_PWD_CODE_EXPIRED")
-            set_code = int(str(redis_code, encoding="utf-8"))
-            app.logger.info("code:" + str(code) + " set_code:" + str(set_code))
-            if str(set_code) == str(code):
-                app.logger.info("code:" + str(code) + " set_code:" + str(set_code))
-                user.password_hash = hashlib.md5(
-                    (user.user_id + newpwd).encode()
-                ).hexdigest()
-                db.session.commit()
-                app.logger.info("update password")
-                return True
-            else:
-                raise_error("USER.RESET_PWD_CODE_ERROR")
-        else:
-            raise_error("USER.USER_NOT_FOUND")
-
-
 def get_sms_code_info(app: Flask, user_id: str, resend: bool):
-    User = get_model(app)
     with app.app_context():
         phone = redis.get(app.config["REDIS_KEY_PREFIX_PHONE"] + user_id)
         if phone is None:
@@ -318,7 +187,6 @@ def send_sms_code_without_check(app: Flask, user_info: User, phone: str):
 def verify_sms_code_without_phone(
     app: Flask, user_info: User, checkcode, course_id: str = None
 ) -> UserToken:
-    User = get_model(app)
     with app.app_context():
         phone = redis.get(app.config["REDIS_KEY_PREFIX_PHONE"] + user_info.user_id)
         if phone is None:
@@ -410,7 +278,6 @@ def verify_sms_code(
         update_user_profile_with_lable,
     )
 
-    User = get_model(app)
     check_save = redis.get(app.config["REDIS_KEY_PREFIX_PHONE_CODE"] + phone)
     if check_save is None and chekcode != FIX_CHECK_CODE:
         raise_error("USER.SMS_SEND_EXPIRED")
@@ -456,7 +323,7 @@ def verify_sms_code(
             )
             if (
                 user_info.user_state is None
-                or user_info.user_state == USER_STATE_UNTEGISTERED  # noqa W503
+                or user_info.user_state == USER_STATE_UNREGISTERED  # noqa W503
             ):
                 user_info.user_state = USER_STATE_REGISTERED
             user_info.mobile = phone
@@ -466,7 +333,7 @@ def verify_sms_code(
             # When there is an install ui, the logic here should be removed
             init_first_course(app, user_info.user_id)
 
-        if user_info.user_state == USER_STATE_UNTEGISTERED:
+        if user_info.user_state == USER_STATE_UNREGISTERED:
             user_info.mobile = phone
             user_info.user_state = USER_STATE_REGISTERED
             user_info.user_language = language
@@ -484,7 +351,6 @@ def verify_sms_code(
                 wx_openid=get_user_openid(user_info),
                 language=get_user_language(user_info),
                 user_avatar=user_info.user_avatar,
-                has_password=user_info.password_hash != "",
                 is_admin=user_info.is_admin,
                 is_creator=user_info.is_creator,
             ),
@@ -506,7 +372,6 @@ def verify_mail_code(
         update_user_profile_with_lable,
     )
 
-    User = get_model(app)
     check_save = redis.get(app.config["REDIS_KEY_PREFIX_MAIL_CODE"] + mail)
     if check_save is None and chekcode != FIX_CHECK_CODE:
         raise_error("USER.MAIL_SEND_EXPIRED")
@@ -552,7 +417,7 @@ def verify_mail_code(
             )
             if (
                 user_info.user_state is None
-                or user_info.user_state == USER_STATE_UNTEGISTERED  # noqa W503
+                or user_info.user_state == USER_STATE_UNREGISTERED  # noqa W503
             ):
                 user_info.user_state = USER_STATE_REGISTERED
             user_info.email = mail
@@ -562,7 +427,7 @@ def verify_mail_code(
             # When there is an install ui, the logic here should be removed
             init_first_course(app, user_info.user_id)
 
-        if user_info.user_state == USER_STATE_UNTEGISTERED:
+        if user_info.user_state == USER_STATE_UNREGISTERED:
             user_info.email = mail
             user_info.user_state = USER_STATE_REGISTERED
             user_info.user_language = language
@@ -580,7 +445,6 @@ def verify_mail_code(
                 wx_openid=get_user_openid(user_info),
                 language=get_user_language(user_info),
                 user_avatar=user_info.user_avatar,
-                has_password=user_info.password_hash != "",
                 is_admin=user_info.is_admin,
                 is_creator=user_info.is_creator,
             ),
@@ -591,9 +455,10 @@ def verify_mail_code(
 def init_first_course(app: Flask, user_id: str):
     """
     Check if there is only one user and one course. If so, update the creator of the course
+    and set the first user as admin and creator
     """
     # Check the number of users
-    user_count = User.query.filter(User.user_state != USER_STATE_UNTEGISTERED).count()
+    user_count = User.query.filter(User.user_state != USER_STATE_UNREGISTERED).count()
     if user_count != 1:
         return
 
@@ -602,25 +467,14 @@ def init_first_course(app: Flask, user_id: str):
     if course_count != 1:
         return
 
+    # Set the first user as admin and creator
+    first_user = User.query.filter(User.user_id == user_id).first()
+    if first_user:
+        first_user.is_admin = True
+        first_user.is_creator = True
+
     # Get the only course
     course = AICourse.query.first()
     # The creator of the updated course
     course.created_user_id = user_id
     db.session.flush()
-
-
-def set_user_password(
-    app: Flask,
-    raw_password: str,
-    mail: str,
-    mobile: str,
-):
-    with app.app_context():
-        user = User.query.filter((User.email == mail) | (User.mobile == mobile)).first()
-        password_hash = hashlib.md5((user.user_id + raw_password).encode()).hexdigest()
-        if user is None:
-            raise_error("USER.USER_ES_NOT_EXIST")
-        user.password_hash = password_hash
-        db.session.flush()
-        db.session.commit()
-        return True
