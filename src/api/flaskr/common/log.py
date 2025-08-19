@@ -156,7 +156,9 @@ def init_log(app: Flask) -> Flask:
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(color_formatter)  # use color formatter
 
-    if "gunicorn" in os.getenv("SERVER_SOFTWARE", ""):
+    from .config import get_config
+
+    if "gunicorn" in get_config("SERVER_SOFTWARE"):
         gunicorn_logger = logging.getLogger("gunicorn.info")
         if gunicorn_logger.handlers:
             for handler in gunicorn_logger.handlers:
@@ -171,7 +173,7 @@ def init_log(app: Flask) -> Flask:
         app.logger.handlers = []
         app.logger.addHandler(file_handler)
         app.logger.addHandler(console_handler)
-    feishu_webhook_url = app.config.get("FEISHU_LOG_WEBHOOK_URL", None)
+    feishu_webhook_url = get_config("FEISHU_LOG_WEBHOOK_URL", None)
     if feishu_webhook_url:
         app.logger.info("Feishu enabled.")
         feishu_handler = FeishuLogHandler(feishu_webhook_url)

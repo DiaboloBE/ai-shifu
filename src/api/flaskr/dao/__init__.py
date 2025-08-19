@@ -1,42 +1,18 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from redis import Redis
-from pymilvus import MilvusClient
 from sqlalchemy import event
 import sqlparse
 import logging
 import traceback
 import os
 
+# create a global db object
+db = None
+
 
 def init_db(app: Flask):
     global db
-    app.logger.info("init db")
-    if (
-        app.config.get("MYSQL_HOST", None) is not None
-        and app.config.get("MYSQL_PORT", None) is not None
-        and app.config.get("MYSQL_DB", None) is not None
-        and app.config["MYSQL_USER"] is not None
-        and app.config.get("MYSQL_PASSWORD") is not None
-    ):
-        app.logger.info("init dbconfig from env")
-        app.config["SQLALCHEMY_DATABASE_URI"] = (
-            "mysql://"
-            + app.config["MYSQL_USER"]
-            + ":"
-            + app.config["MYSQL_PASSWORD"]
-            + "@"
-            + app.config["MYSQL_HOST"]
-            + ":"
-            + str(app.config["MYSQL_PORT"])
-            + "/"
-            + app.config["MYSQL_DB"]
-            + "?charset="
-            + app.config.get("MYSQL_CHARSET", "utf8mb4")
-        )
-    else:
-        app.logger.info("init dbconfig from config")
-
     if app.debug:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
@@ -90,11 +66,20 @@ def init_db(app: Flask):
 
 def init_redis(app: Flask):
     global redis_client
+
+    if app.config["REDIS_HOST"] is None or app.config["REDIS_PORT"] is None:
+        app.logger.warning(
+            "Redis not configured: REDIS_HOST or REDIS_PORT is None - running without Redis"
+        )
+        redis_client = None
+        return
+
     app.logger.info(
         "init redis {} {} {}".format(
             app.config["REDIS_HOST"], app.config["REDIS_PORT"], app.config["REDIS_DB"]
         )
     )
+
     if app.config["REDIS_PASSWORD"] is not None and app.config["REDIS_PASSWORD"] != "":
         redis_client = Redis(
             host=app.config["REDIS_HOST"],
@@ -128,21 +113,3 @@ def run_with_redis(app, key, timeout: int, func, args):
         else:
             app.logger.info("run_with_redis get lock failed {}".format(key))
             return None
-
-
-def init_milvus(app: Flask):
-    global milvus_client
-    if (
-        app.config.get("MILVUS_URI") is not None
-        and app.config.get("MILVUS_TOKEN") is not None
-        and app.config.get("MILVUS_DB_NAME") is not None
-    ):
-        milvus_client = MilvusClient(
-            uri=app.config.get("MILVUS_URI"),
-            token=app.config.get("MILVUS_TOKEN"),
-            db_name=app.config.get("MILVUS_DB_NAME"),
-        )
-        app.logger.info("init milvus done")
-    else:
-        milvus_client = None
-        app.logger.warning("init milvus failed")

@@ -55,82 +55,54 @@ cd ai-shifu
 
 ### Step 2: Set Up Environment Variables
 
-Copy the example environment file:
+Choose and copy the appropriate environment template:
 
 ```bash
-cp docker/.env.example .env
+# For minimal setup (only required variables):
+cp docker/.env.example.minimal docker/.env
+
+# OR for full configuration with all options:
+cp docker/.env.example.full docker/.env
 ```
 
 ### Step 3: Configure Environment Variables
 
-Edit the `.env` file and configure the required settings:
+Edit the `.env` file and configure the required settings.
 
-#### LLM Configuration (Required)
+#### Required Variables (MUST be configured)
 
-At least one LLM provider must be configured:
+These variables are essential for the application to run:
 
-```bash
-# OpenAI
-OPENAI_BASE_URL="https://api.openai.com/v1"
-OPENAI_API_KEY="sk-..."
+1. **Database Connection**
+   - `SQLALCHEMY_DATABASE_URI`: MySQL connection string
+   - Example: `mysql://root:password@localhost:3306/ai-shifu?charset=utf8mb4`
 
-# Or use other providers like:
-# ERNIE_API_ID="your-ernie-id"
-# ERNIE_API_SECRET="your-ernie-secret"
-# ERNIE_API_KEY="your-ernie-key"
+2. **Security**
+   - `SECRET_KEY`: JWT signing key for authentication
+   - Generate secure key: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+   - **Important**: Use different keys for dev/test/prod environments
 
-# GLM_API_KEY="your-glm-key"
-# DEEPSEEK_API_KEY="your-deepseek-key"
-# QWEN_API_KEY="your-qwen-key"
+3. **LLM Provider** (at least one required)
+   - Choose from: OpenAI, ERNIE, ARK, SiliconFlow, GLM, DeepSeek, Qwen
+   - See `.env.example.full` for specific provider configurations
 
-# Set default model (must match your configured provider)
-DEFAULT_LLM_MODEL="gpt-4o"
+#### Configuration Reference
 
-# Default LLM temperature
-DEFAULT_LLM_TEMPERATURE=0.3
-```
+- **Minimal Configuration**: See `docker/.env.example.minimal`
+  - Contains only the 3 required variables plus LLM configuration
+  - Best for quick setup and testing
 
-#### Database Configuration
+- **Full Configuration**: See `docker/.env.example.full`
+  - Contains all 106+ available configuration options
+  - Includes detailed descriptions and examples
+  - Organized by categories: Database, Redis, Auth, LLM, etc.
 
-```bash
-# MySQL (adjust if running locally)
-SQLALCHEMY_DATABASE_URI="mysql://root:ai-shifu@ai-shifu-mysql:3306/ai-shifu"
+#### Important Notes
 
-# Redis (adjust if running locally)
-REDIS_HOST="ai-shifu-redis"
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_PASSWORD=""
-```
-
-#### Application Settings
-
-```bash
-# Universal verification code for testing
-UNIVERSAL_VERIFICATION_CODE="1024"
-
-# Frontend configuration
-REACT_APP_BASEURL="http://localhost:5800"
-SITE_HOST="http://localhost:8081/"
-```
-
-#### Optional Services
-
-```bash
-# Alibaba Cloud OSS for file storage
-ALIBABA_CLOUD_OSS_ACCESS_KEY_ID=""
-ALIBABA_CLOUD_OSS_ACCESS_KEY_SECRET=""
-ALIBABA_CLOUD_OSS_ENDPOINT="oss-cn-beijing.aliyuncs.com"
-ALIBABA_CLOUD_OSS_BUCKET=""
-
-# Email SMTP for email verification
-SMTP_SERVER=""
-SMTP_PORT=25
-SMTP_USERNAME=""
-SMTP_PASSWORD=""
-SMTP_SENDER=""
-
-```
+- All sensitive values (API keys, passwords) should be kept secure
+- Never commit `.env` files to version control
+- For production deployments, use environment-specific configurations
+- Refer to the example files for detailed explanations of each variable
 
 ### Step 4: Manual Installation (Development)
 
@@ -153,7 +125,6 @@ Update your `.env` file for local development:
 ```bash
 # Update database URLs for local services
 SQLALCHEMY_DATABASE_URI="mysql://root:ai-shifu@localhost:3306/ai-shifu"
-REDIS_HOST="localhost"
 
 # Update API base URL
 REACT_APP_BASEURL="http://localhost:5800"
@@ -163,7 +134,8 @@ REACT_APP_BASEURL="http://localhost:5800"
 
 ```bash
 cd src/api
-cp ../../.env .env
+# Copy the environment configuration from docker directory
+cp ../../docker/.env .env
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -179,7 +151,8 @@ gunicorn -w 4 -b 0.0.0.0:5800 'app:app' --timeout 300 --log-level debug
 
 ```bash
 cd src/web
-cp ../../.env .env
+# Copy the environment configuration from docker directory
+cp ../../docker/.env .env
 
 # Install Node.js dependencies
 npm install  # or use pnpm install
@@ -194,7 +167,8 @@ The user frontend will be available at `http://localhost:3000`.
 
 ```bash
 cd src/cook-web
-cp ../../.env .env
+# Copy the environment configuration from docker directory
+cp ../../docker/.env .env
 
 # Install Node.js dependencies
 npm install  # or use pnpm install
