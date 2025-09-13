@@ -228,7 +228,6 @@ class RunScriptContext:
                         LearnProgressRecord.status != LEARN_STATUS_RESET,
                     ).first()
                     if attend_info:
-
                         continue
                     attend_info = LearnProgressRecord()
                     attend_info.outline_item_bid = outline_item_info_db.outline_item_bid
@@ -442,7 +441,6 @@ class RunScriptContext:
                     "",
                 )
             elif update.type == _OutlineUpateType.NODE_START:
-
                 if new_chapter:
                     status = LEARN_STATUS_NOT_STARTED
                 else:
@@ -561,7 +559,6 @@ class RunScriptContext:
         return outline_struct
 
     def _get_run_script_info(self, attend: LearnProgressRecord) -> RunScriptInfo:
-
         outline_item_id = attend.outline_item_bid
         outline_item_info: ShifuOutlineItemDto = get_outline_item_dto(
             self.app, outline_item_id, self._preview_mode
@@ -653,6 +650,7 @@ class RunScriptContext:
                 block_dto=run_script_info.block_dto,
                 trace_args=self._trace_args,
                 trace=self._trace,
+                is_preview=self._preview_mode,
             )
             if res:
                 yield from res
@@ -675,6 +673,7 @@ class RunScriptContext:
                 block_dto=run_script_info.block_dto,
                 trace_args=self._trace_args,
                 trace=self._trace,
+                is_preview=self._preview_mode,
             )
             if run_script_info.block_dto.type == "content" or not continue_check:
                 res = handle_block_output(
@@ -685,6 +684,7 @@ class RunScriptContext:
                     block_dto=run_script_info.block_dto,
                     trace_args=self._trace_args,
                     trace=self._trace,
+                    is_preview=self._preview_mode,
                 )
                 if res:
                     yield from res
@@ -790,6 +790,7 @@ class RunScriptContext:
             block_dto=run_script_info.block_dto,
             trace_args=self._trace_args,
             trace=self._trace,
+            is_preview=self._preview_mode,
         )
         if res:
             yield from res
